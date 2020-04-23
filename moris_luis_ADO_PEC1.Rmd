@@ -295,7 +295,7 @@ No se va a realizar ningún filtrado no específico.
 
 # Comparaciones
 
-Estamos ante um diseño de 3x2, en este caso vamos a simular que estamos interesados en las comparaciones:
+Estamos ante un diseño de 3x2, en este caso vamos a simular que estamos interesados en las comparaciones:
 
 - Main Effect Macho vs. Hembra
 - Single Effect Resistente vs Sensible
@@ -306,7 +306,8 @@ design_matrix = model.matrix(~0+group, data=pData(eset_rma))
 colnames(design_matrix)=c('control_female','control_male','resistant_female','resistant_male','sensitive_female','sensitive_male')
 
 contrast_matrix = makeContrasts(res_vs_sens = resistant_female + resistant_male - sensitive_female - sensitive_male, #Regardless of sex
-                                male_vs_female = resistant_female + control_female + sensitive_female - (resistant_male + control_male + sensitive_male), # ME of sex
+                                male_vs_female = resistant_female + control_female + sensitive_female -
+                                                 (resistant_male + control_male + sensitive_male), # ME of sex
                                 int_sex_resvssens = (resistant_female - resistant_male) - (sensitive_female - sensitive_male),
                                 levels = design_matrix)
 
@@ -334,8 +335,8 @@ return(annotatedTopTab)
 }
 
 top_sex_annotated = annotatedTopTable(top_sex, anotPackage = 'drosophila2.db')
-top_int = annotatedTopTable(top_int, anotPackage = 'drosophila2.db')
-top_res_vs_ses = annotatedTopTable(top_res_vs_ses, anotPackage = 'drosophila2.db')
+top_int_annotated = annotatedTopTable(top_int, anotPackage = 'drosophila2.db')
+top_res_vs_ses_annitated = annotatedTopTable(top_res_vs_ses, anotPackage = 'drosophila2.db')
 
 
 ```
