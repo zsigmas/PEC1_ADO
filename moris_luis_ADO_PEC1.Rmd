@@ -57,7 +57,50 @@ plotPCA3 = function (datos, labels, factor, title, scale,colores, size = 1.5, gl
      ggtitle(paste("Principal Component Analysis for: ",title,sep=" "))+ 
      theme(plot.title = element_text(hjust = 0.5)) +
      scale_color_manual(values=colores)
-   }
+}
+
+
+# A volcano plot with some more bells and whistles
+my_volcano_plot = function(cm, geneSymbols){
+  
+  # cm the ouput of the ebayes function
+  # genesymbols: select(drosophila2.db, rownames(cm), c("SYMBOL"))
+  
+  plot_logod = tibble::as_tibble(cm$coefficients, rownames='PROBEID') %>%
+  tidyr::pivot_longer(-PROBEID, names_to = 'contrast', values_to = 'coef')
+
+plot_d = tibble::as_tibble(cm$p.value, rownames='PROBEID') %>%
+  tidyr::pivot_longer(-PROBEID, names_to = 'contrast', values_to = 'p_val') %>% 
+  dplyr::group_by(contrast) %>% dplyr::mutate(adj_p_val = p.adjust(p_val, method = 'fdr')) %>% dplyr::ungroup() %>% 
+  dplyr::mutate(sig_p = p_val<.05,
+                sig_adj_p = adj_p_val<.05,
+                minus_log_10_p = -log10(p_val),
+                minus_log_10_adj_p = -log10(adj_p_val),) %>% 
+  dplyr::inner_join(geneSymbols, by='PROBEID') %>% 
+  dplyr::inner_join(plot_logod, by=c('PROBEID', 'contrast'))
+
+unadj_p = ggplot(plot_d, aes(x=coef, y=minus_log_10_p, color=sig_p)) +
+  geom_point() +
+  ggthemes::theme_tufte(base_family = 'sans') +
+  geom_hline(yintercept = -log10(.05), linetype=2) + 
+  geom_vline(xintercept = 1) + 
+  geom_vline(xintercept = -1) + 
+  facet_wrap(.~contrast, scale='free') +
+  labs(x = 'Coefficient', y = '-log10(p)', color = 'unadjusted p<.05', title='Unadjusted p-value')
+
+adj_p = ggplot(plot_d, aes(x=coef, y=minus_log_10_adj_p, color=sig_adj_p)) +
+  geom_point() +
+  ggthemes::theme_tufte(base_family = 'sans') +
+  geom_hline(yintercept = -log10(.05), linetype=2) + 
+  geom_vline(xintercept = 1) + 
+  geom_vline(xintercept = -1) + 
+  facet_wrap(.~contrast, scale='free')+
+  labs(x = 'Coefficient', y = '-log10(p_adj)', color = 'FDR Corrected p<.05', title='FDR Corrected p-value')
+
+  return(list(unadj_plot = unadj_p, adj_plot=adj_p, plot_d=plot_d))
+}
+
+
 ```
 
 
@@ -171,7 +214,7 @@ plotPCA3 (exprs(raw_data), labels=pData(raw_data)$short_name, factor=pData(raw_d
 
 ## Log-Transform
 
-```{r plot_log_data, echo=FALSE, fig.cap="Array Quality Metrics Output",fig.fullwidth = TRUE}
+```{r plot_log_data, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, out.height='100%', fig.cap="Array Quality Metrics Output",fig.fullwidth = TRUE}
 out = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read("./pre_norm_log/outlier.png"))))
 hm = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read_pdf("./pre_norm_log/hm.pdf"))))
 ma = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read_pdf("./pre_norm_log/ma.pdf"))))
@@ -267,7 +310,7 @@ Una vez normalizado vamos a volver a realizar un análisis de calidad de los dat
 
 ## Array quality metrics output después de la normalización
 
-```{r show_AQM_rma, echo=FALSE, fig.cap="Array Quality Metrics Output",fig.fullwidth = TRUE}
+```{r show_AQM_rma, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, out.height='100%', fig.cap="Array Quality Metrics Output",fig.fullwidth = TRUE}
 out = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read("./norm/outlier.png"))))
 hm = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read_pdf("./norm/hm.pdf"))))
 ma = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read_pdf("./norm/ma.pdf"))))
@@ -290,8 +333,17 @@ Los datos parecen correctos, por tanto no es necesaria ninguna accción.
 
 # Filtrado
 
-No se va a realizar ningún filtrado no específico.
+Vamos a filtrar las probes que no tengan entrada en y las que corresponden a las sondas de control de Affymetrix. Vamos a hacerlo de manera manual utilizando la base de datos correspondiente al chip: *Affymetrix Drosophila Genome 2.0 Array*, en el paquete 'drosophila2.db'. Lo que haremos será eliminar todas las *features* cuyo entrada *EntrezID* sea *NA*. 
 
+```{r filtrado no específico, echo = FALSE}
+library(drosophila2.db)
+geneSymbols <- suppressMessages(select(drosophila2.db, rownames(eset_rma), c("SYMBOL", "ENTREZID", "GENENAME")))
+filtered_probes = geneSymbols %>% dplyr::filter(!is.na(ENTREZID), !is.na(GENENAME)) %>% dplyr::pull(PROBEID)
+
+eset_rma_filtered = eset_rma[rownames(eset_rma) %in% filtered_probes, ]
+```
+
+De esta manera pasamos de tener `r nrow(eset_rma)` *features* a `r nrow(eset_rma_filtered)`. Lo cual nos ayudará, por ejemplo, reduciendo el impacto de la correción por múltiples comparaciones.
 
 # Comparaciones
 
@@ -301,8 +353,8 @@ Estamos ante un diseño de 3x2, en este caso vamos a simular que estamos interes
 - Single Effect Resistente vs Sensible
 - Interacción Sexo vs (Resistente vs Sensible)
 
-```{r compute_comparions}
-design_matrix = model.matrix(~0+group, data=pData(eset_rma))
+```{r compute_comparions, echo=FALSE}
+design_matrix = model.matrix(~0+group, data=pData(eset_rma_filtered))
 colnames(design_matrix)=c('control_female','control_male','resistant_female','resistant_male','sensitive_female','sensitive_male')
 
 contrast_matrix = makeContrasts(res_vs_sens = resistant_female + resistant_male - sensitive_female - sensitive_male, #Regardless of sex
@@ -313,53 +365,145 @@ contrast_matrix = makeContrasts(res_vs_sens = resistant_female + resistant_male 
 
 m = lmFit(eset_rma, design_matrix)
 cm = eBayes(contrasts.fit(m, contrast_matrix))
-top_sex = topTable(cm, coef='male_vs_female', adjust='fdr')
-top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr')
-top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr')
+top_sex = topTable(cm, coef='male_vs_female', adjust='fdr', number=100, sort.by = 'p')
+top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr', number=100, sort.by = 'p')
+top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=100, sort.by = 'p')
+```
+
+Vamos a ajustar un modelo lineal con Limma y la siguiente matriz de diseño
+
+```{r show_design_matrix, fig.cap='Horizontal axis indicates the term of the design matrix. Vertical axis indicate the short name of the sample'}
+
+heatmap(design_matrix, Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('black', 'white'))
+
+# design_matrix_tib = tibble::as_tibble(design_matrix, rownames = 'Sample') %>%
+#   dplyr::mutate(control_female = kableExtra::cell_spec(control_female, 'html', bold = control_female==1),
+#                 control_male = kableExtra::cell_spec(control_male, 'html', bold = control_male==1),
+#                 resistant_female = kableExtra::cell_spec(resistant_female, 'html', bold = resistant_female==1),
+#                 resistant_male = kableExtra::cell_spec(resistant_male, 'html', bold = resistant_male==1),
+#                 sensitive_female = kableExtra::cell_spec(sensitive_female, 'html', bold = sensitive_female==1),
+#                 sensitive_male = kableExtra::cell_spec(sensitive_male, 'html', bold = sensitive_male==1),
+#                 )
+# design_matrix_tib %>% kableExtra::kable(format='html', escape=F, caption='Design Matrix') %>% kableExtra::kable_styling(full_width = F) %>% kableExtra::row_spec(0, angle=-45) %>% kableExtra::add_header_above(c(' '=1, 'Model Term'=6))
+
+
+```
+
+Una vez ajustado el modelo calculamos los siguientes contrastes
+
+```{r show_contrast_matrix}
+# contrast_matrix %>% kableExtra::kable(caption='Contrast Matrix') %>% kableExtra::kable_styling()
+
+heatmap(t(contrast_matrix), Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('#FFFFFF', '#666666', '#000000'))
+legend(x="topleft", legend=c("1", "0", "-1"),
+     fill=c('#FFFFFF', '#666666', '#000000'))
 ```
 
 
 # Anotación
 
+Anotamos los datos con el paquete *drosophila2.db*.
 
-```{r annotation}
+```{r annotation, echo=FALSE}
 library(drosophila2.db)
 annotatedTopTable <- function(topTab, anotPackage)
 {
   topTab <- cbind(PROBEID=rownames(topTab), topTab)
   myProbes <- rownames(topTab)
   thePackage <- eval(parse(text = anotPackage))
-  geneAnots <- select(thePackage, myProbes, c("SYMBOL", "ENTREZID", "GENENAME"))
+  geneAnots <- suppressMessages(select(thePackage, myProbes, c("SYMBOL", "ENTREZID", "GENENAME")))
   annotatedTopTab<- merge(x=geneAnots, y=topTab, by.x="PROBEID", by.y="PROBEID")
 return(annotatedTopTab)
 }
 
-top_sex_annotated = annotatedTopTable(top_sex, anotPackage = 'drosophila2.db')
-top_int_annotated = annotatedTopTable(top_int, anotPackage = 'drosophila2.db')
-top_res_vs_ses_annitated = annotatedTopTable(top_res_vs_ses, anotPackage = 'drosophila2.db')
+top_sex_annotated = annotatedTopTable(top_sex, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
+top_int_annotated = annotatedTopTable(top_int, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
+top_res_vs_sens_annotated = annotatedTopTable(top_res_vs_ses, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
 
 
 ```
 
-```{r volcano_plot}
-geneSymbols <- select(drosophila2.db, rownames(cm), c("SYMBOL"))
-SYMBOLS<- geneSymbols$SYMBOL
-volcanoplot(cm, coef=1, highlight=4, names=SYMBOLS, 
-            main=paste("Differentially expressed genes", colnames(contrast_matrix)[1], sep="\n"))
-  abline(v=c(-1,1))
+
+# Resultados
+
+## Tablas con los genes más diferencialmente expresados por condición
+
+Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 100 genes más diferencialmente expresados por cada comparación.
+
+```{r show_annotated_tables, echo=FALSE}
+
+pretty_top_table = function(top_table){
+  top_table = dplyr::arrange(top_table, P.Value)
+  top_table = dplyr::mutate_if(top_table, is.numeric, signif, digits=2)
+  top_table = dplyr::select(top_table, -PROBEID)
+}
+
+DT::datatable(pretty_top_table(top_sex_annotated), caption = 'Top Expressed Genes Male vs. Female contrast', filter='top')
+DT::datatable(pretty_top_table(top_int_annotated), caption = 'Top Expressed Genes interaction (Sex vs. (Resistant vs. Sensible) contrast', filter='top')
+DT::datatable(pretty_top_table(top_res_vs_sens_annotated), caption = 'Top Expressed Genes Resistant vs. Sensible contrast', filter='top')
+```
+
+## Volcano plot
+
+Aquí presentamos un volcano plot con algunos extras sobre el original, con los p-valores ajustados y sin ajustar. Además se incluye una tabla con el porcentaje de genes diferencialmente expresados en cada uno de los contrastes.
+
+```{r volcano_plot, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, out.height='100%', fig.cap='Modified Volcano plot. Horizontal line indicates the limit of significance. Vertical lines indicates the log2 fold difference.'}
+
+# SYMBOLS<- geneSymbols$SYMBOL
+# volcanoplot(cm, coef=1, highlight=4, names=SYMBOLS, 
+#             main=paste("Differentially expressed genes", colnames(contrast_matrix)[1], sep="\n"))
+#   abline(v=c(-1,1))
+
+
+
+geneSymbols <- suppressMessages(select(drosophila2.db, rownames(cm), c("SYMBOL")))
+
+vol_plt = my_volcano_plot(cm, geneSymbols)
+
+cowplot::plot_grid(plotlist=vol_plt[1:2], ncol=1)
+
+vol_plt$plot_d %>% dplyr::group_by(contrast) %>% dplyr::summarise('Unadjusted p<.05' = paste0(signif(100*mean(sig_p),2),'%'),
+                                                          'FDR Corrected p<.05' = paste0(signif(100*mean(sig_adj_p),2),'%')) %>%
+  kableExtra::kable(digits = 2, caption='Percentage of significant genes') %>%
+  kableExtra::kable_styling(full_width = F) %>% 
+  kableExtra::add_footnote('Rounded to two digits')
 ```
 
 
+## Diagrama de Venn
+
+```{r venn_diagramecho=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, fig.width=6, out.height='100%', fig.cap='Venn Diagram showing how many genes are significant in each of the contrasts and their intersections.'}
+
+res = decideTests(cm)
+sum.res.rows<-apply(abs(res),1,sum)
+res.selected<-res[sum.res.rows!=0,]
+print(summary(res))
+vennDiagram (res.selected[,1:3], main="Genes in common #1", cex=0.9)
+```
+
+## Tabla de anotaciones
+
+```{r}
+if(!file.exists("anotations.html")){
+  library(annaffy)
+  genesSelected <- rownames(res.selected)
+  at <- aafTableAnn(genesSelected, "drosophila2.db")
+  saveHTML (at, "anotations.html","Annotations for selected genes")
+  }
+
+```
 
 
+## Perfiles de expresión
 
+```{r}
+probeNames<-rownames(res)
+probeNames.selected<-probeNames[sum.res.rows!=0]
+exprs2cluster <-exprs(eset_rma)[probeNames.selected,]
 
+heatmap(exprs2cluster, col=rainbow(100), cexCol=0.9)
 
-
-
-
-
-
+```
 
 
 
