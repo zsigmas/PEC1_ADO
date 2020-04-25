@@ -363,11 +363,11 @@ contrast_matrix = makeContrasts(res_vs_sens = resistant_female + resistant_male 
                                 int_sex_resvssens = (resistant_female - resistant_male) - (sensitive_female - sensitive_male),
                                 levels = design_matrix)
 
-m = lmFit(eset_rma, design_matrix)
+m = lmFit(eset_rma_filtered, design_matrix)
 cm = eBayes(contrasts.fit(m, contrast_matrix))
-top_sex = topTable(cm, coef='male_vs_female', adjust='fdr', number=100, sort.by = 'p')
-top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr', number=100, sort.by = 'p')
-top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=100, sort.by = 'p')
+top_sex = topTable(cm, coef='male_vs_female', adjust='fdr', number=10000, sort.by = 'p')
+top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr', number=10000, sort.by = 'p')
+top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=10000, sort.by = 'p')
 ```
 
 Vamos a ajustar un modelo lineal con Limma y la siguiente matriz de diseño
@@ -454,10 +454,6 @@ Aquí presentamos un volcano plot con algunos extras sobre el original, con los 
 #             main=paste("Differentially expressed genes", colnames(contrast_matrix)[1], sep="\n"))
 #   abline(v=c(-1,1))
 
-
-
-geneSymbols <- suppressMessages(select(drosophila2.db, rownames(cm), c("SYMBOL")))
-
 vol_plt = my_volcano_plot(cm, geneSymbols)
 
 cowplot::plot_grid(plotlist=vol_plt[1:2], ncol=1)
@@ -472,18 +468,18 @@ vol_plt$plot_d %>% dplyr::group_by(contrast) %>% dplyr::summarise('Unadjusted p<
 
 ## Diagrama de Venn
 
-```{r venn_diagramecho=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, fig.width=6, out.height='100%', fig.cap='Venn Diagram showing how many genes are significant in each of the contrasts and their intersections.'}
+```{r venn_diagram, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, fig.width=6, out.height='100%', fig.cap='Venn Diagram showing how many genes are significant in each of the contrasts and their intersections.'}
 
 res = decideTests(cm)
 sum.res.rows<-apply(abs(res),1,sum)
 res.selected<-res[sum.res.rows!=0,]
-print(summary(res))
+summary(res) %>% kableExtra::kable(caption = 'Differential expression table per contrast') %>% kableExtra::kable_styling(full_width = F)
 vennDiagram (res.selected[,1:3], main="Genes in common #1", cex=0.9)
 ```
 
 ## Tabla de anotaciones
 
-```{r}
+```{r annotation_table}
 if(!file.exists("anotations.html")){
   library(annaffy)
   genesSelected <- rownames(res.selected)
@@ -496,7 +492,30 @@ if(!file.exists("anotations.html")){
 
 ## Perfiles de expresión
 
-```{r}
+```{r expression_profiles, eval=FALSE, include=FALSE}
+library(gplots)
+
+selected_probes = rownames(res.selected)
+selected_rows = rownames(exprs(eset_rma_filtered)) %in% selected_probes
+
+HMdata = exprs(eset_rma_filtered) %>%
+  tibble::as_tibble(rownames='PROBEID') %>%
+  tidylog::inner_join(dplyr::distinct(geneSymbols, PROBEID, .keep_all=T), by=c('PROBEID')) %>% 
+  dplyr::filter(PROBEID %in% selected_probes) %>% 
+  tibble::column_to_rownames(var='SYMBOL')
+HMdata 
+
+  
+length(rownames(exprs(eset_rma_filtered)))
+length(unique(rownames(exprs(eset_rma_filtered))))
+
+
+
+
+HMdata
+
+geneSymbols
+
 probeNames<-rownames(res)
 probeNames.selected<-probeNames[sum.res.rows!=0]
 exprs2cluster <-exprs(eset_rma)[probeNames.selected,]
@@ -505,7 +524,67 @@ heatmap(exprs2cluster, col=rainbow(100), cexCol=0.9)
 
 ```
 
+## Enrichment analsysis
 
+```{r compute_enrichment, echo=FALSE}
+library(clusterProfiler)
+
+dros = search_kegg_organism('Drosophila melanogaster', by='scientific_name')
+
+p_tibble =tibble::as_tibble(cm$p.value, rownames='PROBEID') %>% 
+  dplyr::mutate(res_vs_sens = p.adjust(res_vs_sens, method = 'fdr'),
+                male_vs_female = p.adjust(male_vs_female, method = 'fdr'),
+                int_sex_resvssens = p.adjust(int_sex_resvssens, method = 'fdr')) %>% 
+  tidylog::inner_join(geneSymbols, by='PROBEID')
+
+gene_list_res_vs_sens = p_tibble %>%
+  dplyr::filter(int_sex_resvssens<1) %>% 
+  dplyr::pull(ENTREZID) %>%
+  bitr(., fromType = "ENTREZID",
+        toType = c("ENSEMBL", "SYMBOL"),
+        OrgDb = org.Dm.eg.db)
+  
+
+gene_list_int = p_tibble %>%
+  dplyr::filter(int_sex_resvssens<.05) %>% 
+  dplyr::pull(SYMBOL) %>%
+  glue::glue('Dmel_{gn}', gn=.)
+
+gene_list_res_vs_sens = p_tibble %>%
+  dplyr::filter(res_vs_sens<.1) %>% 
+  dplyr::pull(SYMBOL) %>%
+  glue::glue('Dmel_{gn}', gn=.)
+
+enrich_sex = gseGO(gene_list_sex, OrgDb = org.Dm.eg.db)
+enrich_int = enrichKEGG(gene_list_int, organism='dme', pvalueCutoff = .1)
+enrich_res_vs_sens = enrichKEGG(gene_list_res_vs_sens, organism='dme', pvalueCutoff = .1)
+
+data(geneList, package="DOSE")
+geneList
+gene <- names(geneList)[abs(geneList) > 2]
+
+
+
+gene.df <- bitr(p_tibble$ENTREZID, fromType = "ENTREZID",
+        toType = c("ENSEMBL", "SYMBOL"),
+        OrgDb = org.Dm.eg.db)
+geneList
+
+ego2 <- enrichGO(gene         = gene_list_res_vs_sens$ENSEMBL,
+                OrgDb         = org.Dm.eg.db,
+                keyType       = 'ENSEMBL',
+                ont           = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05)
+
+ego2
+```
+
+
+```{r show_enrichment, echo=FALSE}
+goplot(ego2)
+  ```
 
 
 # Introduction
