@@ -208,11 +208,12 @@ plot_grid(out, hm, box, pca, dens, msd, ma, ncol = 3)
 
 Vamos ahora a ver un PCA más completo
 
-```{r PCA_raw, echo=FALSE, fig.margin=TRUE}
+```{r PCA_raw, echo=FALSE}
 plotPCA3 (exprs(raw_data), labels=pData(raw_data)$short_name, factor=pData(raw_data)$selection, title='', scale=F,colores=c("red", "blue", "green", "yellow",'brown','pink'), size = 1.5, glineas = 0.25)
 ```
 
 ## Log-Transform
+
 
 ```{r plot_log_data, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, out.height='100%', fig.cap="Array Quality Metrics Output",fig.fullwidth = TRUE}
 out = (cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read("./pre_norm_log/outlier.png"))))
@@ -236,7 +237,7 @@ Vamos ahora a utilizar la librería *affyPLM* vamos a ajusjar un modelo a nivel 
 
 En el caso del *RLE* vamos a encontrar una medida estandarizada de la expresión, que ha de ser similar a través de arrays, y en el caso de *NUSE* observaremos los residuos normalizados del modelo cuya distribución ha de ser similar a través de arrays.
 
-```{r show_affymetrics, include=FALSE,fig.fullwidth = TRUE}
+```{r show_affymetrics, include=FALSE}
 library(affyPLM)
 
 if(!file.exists('affyPLM.RData')){
@@ -259,7 +260,7 @@ RLE_p = ggplot(RLE_d, aes(x=short_name, y=intensity, color=sex, fill=group)) +
   scale_color_grey() +
   ggthemes::theme_tufte(base_family = 'sans') +
   theme(axis.text.x = element_text(angle = 90), legend.position = 'none') +
-  scale_y_continuous(breaks = c(-0.5,0,0.5), limits = c(-.75, .75)) +
+  scale_y_continuous(breaks = c(-1,0,1), limits = c(-.75, .75)) +
   labs(title = 'RLE', x = 'sample')
 
 NUSE_p = ggplot(NUSE_d, aes(x=short_name, y=intensity, color=sex, fill=group)) +
@@ -267,13 +268,15 @@ NUSE_p = ggplot(NUSE_d, aes(x=short_name, y=intensity, color=sex, fill=group)) +
   scale_color_grey() +
   ggthemes::theme_tufte(base_family = 'sans') +
   theme(axis.text.x = element_text(angle = 90)) +
-  scale_y_continuous(limits = c(0.95, 1.05)) +
+  scale_y_continuous(limits = c(0.93, 1.07)) +
   labs(title = 'NUSE', x = 'sample')
-
-plot_grid(RLE_p, NUSE_p)
 ```
 
-No parece que ninguno de los arrays se desvíe particularmente en ninguna de las dos gráficas, si que vemos que hay una diferencia clara entre sexos. Podríamos preguntarnos en este caso si se ha cometido algún error y los machos perteneces a un batch y las hembras a otros, es decir hemos generado algún tipo de confound, aunque es probable que se deba a diferencias reales.
+```{r show_affy_plm, echo=FALSE, fig.fullwidth = TRUE, out.width='100%'}
+cowplot::plot_grid(RLE_p, NUSE_p, rel_widths = c(1, 1.4))
+```
+
+No parece que ninguno de los arrays se desvíe particularmente en ninguna de las dos gráficas, si que vemos que hay una diferencia clara entre sexos. Podríamos preguntarnos en este caso si se ha cometido algún error y los machos perteneces a un batch y las hembras a otros, es decir hemos generado algún tipo de confound.
 
 ## Conclusiones de calidad
 
@@ -292,7 +295,7 @@ Durante este paso el algoritmo:
 - Normalizará la señal entre arrays, nunca entre condiciones experimentales.
 - Colapsará todos los valores de cada grupo de sondas en un único valor por gen.
 
-```{r compute_rma, cache=T}
+```{r compute_rma, cache=T , echo=FALSE}
 
 if(!file.exists('rma_normalized.Rda')){
   eset_rma = oligo::rma(raw_data)
@@ -302,7 +305,7 @@ if(!file.exists('rma_normalized.Rda')){
 }
 ```
 
-```{r compute_AQM_rma}
+```{r compute_AQM_rma, echo=FALSE}
 # arrayQualityMetrics::arrayQualityMetrics(eset_rma, intgroup = c('sex', 'selection', 'line'), outdir = 'norm', force=T)
 ```
 
@@ -333,12 +336,14 @@ Los datos parecen correctos, por tanto no es necesaria ninguna accción.
 
 # Filtrado
 
-Vamos a filtrar las probes que no tengan entrada en y las que corresponden a las sondas de control de Affymetrix. Vamos a hacerlo de manera manual utilizando la base de datos correspondiente al chip: *Affymetrix Drosophila Genome 2.0 Array*, en el paquete 'drosophila2.db'. Lo que haremos será eliminar todas las *features* cuyo entrada *EntrezID* sea *NA*. 
+Vamos a filtrar las probes que no tengan entrada en y las que corresponden a las sondas de control de Affymetrix. Vamos a hacerlo de manera manual utilizando la base de datos correspondiente al chip: *Affymetrix Drosophila Genome 2.0 Array*, en el paquete 'drosophila2.db'. Lo que haremos será eliminar todas las *features* cuyo entrada *EntrezID* sea *NA*.
+
+También vamos a eliminar algunas sondas que tienen varios genes asignados, o los genes que tienen varias sondas asignadas. Puede que exista alguna manera más correcta de realizar este paso, pero por sencillez las vamos a eliminar.
 
 ```{r filtrado no específico, echo = FALSE}
 library(drosophila2.db)
 geneSymbols <- suppressMessages(select(drosophila2.db, rownames(eset_rma), c("SYMBOL", "ENTREZID", "GENENAME")))
-filtered_probes = geneSymbols %>% dplyr::filter(!is.na(ENTREZID), !is.na(GENENAME)) %>% dplyr::pull(PROBEID)
+filtered_probes = geneSymbols %>% dplyr::filter(!is.na(ENTREZID), !is.na(GENENAME), !(duplicated(PROBEID)|duplicated(PROBEID, fromLast=T)),!(duplicated(ENTREZID)|duplicated(ENTREZID, fromLast=T))) %>% dplyr::pull(PROBEID)
 
 eset_rma_filtered = eset_rma[rownames(eset_rma) %in% filtered_probes, ]
 ```
@@ -358,23 +363,23 @@ design_matrix = model.matrix(~0+group, data=pData(eset_rma_filtered))
 colnames(design_matrix)=c('control_female','control_male','resistant_female','resistant_male','sensitive_female','sensitive_male')
 
 contrast_matrix = makeContrasts(res_vs_sens = resistant_female + resistant_male - sensitive_female - sensitive_male, #Regardless of sex
-                                male_vs_female = resistant_female + control_female + sensitive_female -
-                                                 (resistant_male + control_male + sensitive_male), # ME of sex
+                                male_vs_female = resistant_male + control_male + sensitive_male -
+                                                 (resistant_female + control_female + sensitive_female), # ME of sex
                                 int_sex_resvssens = (resistant_female - resistant_male) - (sensitive_female - sensitive_male),
                                 levels = design_matrix)
 
 m = lmFit(eset_rma_filtered, design_matrix)
 cm = eBayes(contrasts.fit(m, contrast_matrix))
-top_sex = topTable(cm, coef='male_vs_female', adjust='fdr', number=10000, sort.by = 'p')
-top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr', number=10000, sort.by = 'p')
-top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=10000, sort.by = 'p')
+top_sex = topTable(cm, coef='male_vs_female', adjust='fdr', number=1000, sort.by = 'p')
+top_res_vs_ses = topTable(cm, coef='res_vs_sens', adjust='fdr', number=1000, sort.by = 'p')
+top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=1000, sort.by = 'p')
 ```
 
 Vamos a ajustar un modelo lineal con Limma y la siguiente matriz de diseño
 
-```{r show_design_matrix, fig.cap='Horizontal axis indicates the term of the design matrix. Vertical axis indicate the short name of the sample'}
+```{r show_design_matrix, echo=FALSE, fig.cap='Horizontal axis indicates the term of the design matrix. Vertical axis indicate the short name of the sample'}
 
-heatmap(design_matrix, Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('black', 'white'))
+# heatmap(design_matrix, Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('black', 'white'))
 
 # design_matrix_tib = tibble::as_tibble(design_matrix, rownames = 'Sample') %>%
 #   dplyr::mutate(control_female = kableExtra::cell_spec(control_female, 'html', bold = control_female==1),
@@ -387,16 +392,35 @@ heatmap(design_matrix, Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('black',
 # design_matrix_tib %>% kableExtra::kable(format='html', escape=F, caption='Design Matrix') %>% kableExtra::kable_styling(full_width = F) %>% kableExtra::row_spec(0, angle=-45) %>% kableExtra::add_header_above(c(' '=1, 'Model Term'=6))
 
 
+dm_heat = design_matrix %>% tibble::as.tibble(rownames='sample') %>% tidyr::pivot_longer(-sample, names_to = 'group', values_to = 'val') %>% dplyr::mutate(val=factor(val))
+
+ggplot(dm_heat, aes(x=group, y=sample, fill=val)) +
+  geom_tile() +
+  scale_fill_manual(values=c('black', 'white')) +
+  ggthemes::theme_tufte(base_family = 'sans') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = 'none') +
+  labs(x='Grupo', y='Muestra', title='Matriz de diseño')
+
 ```
 
 Una vez ajustado el modelo calculamos los siguientes contrastes
 
-```{r show_contrast_matrix}
+```{r show_contrast_matrix, echo=FALSE}
 # contrast_matrix %>% kableExtra::kable(caption='Contrast Matrix') %>% kableExtra::kable_styling()
 
-heatmap(t(contrast_matrix), Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('#FFFFFF', '#666666', '#000000'))
-legend(x="topleft", legend=c("1", "0", "-1"),
-     fill=c('#FFFFFF', '#666666', '#000000'))
+# heatmap(t(contrast_matrix), Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('#FFFFFF', '#666666', '#000000'))
+# legend(x="topleft", legend=c("1", "0", "-1"),
+     # fill=c('#FFFFFF', '#666666', '#000000'))
+
+contrastm_heat = contrast_matrix %>% tibble::as.tibble(rownames='group') %>% tidyr::pivot_longer(-group, names_to = 'contrast', values_to = 'val') %>% dplyr::mutate(val=factor(val))
+
+ggplot(contrastm_heat, aes(x=group, y=contrast, label=val)) +
+  geom_tile(aes(fill=val)) +
+  geom_label() +
+  scale_fill_manual(values=c('black', 'grey', 'white')) +
+  ggthemes::theme_tufte(base_family = 'sans') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = 'none') +
+  labs(x='Grupo', y='Contraste', title='Matriz de contrastes')
 ```
 
 
@@ -419,8 +443,6 @@ return(annotatedTopTab)
 top_sex_annotated = annotatedTopTable(top_sex, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
 top_int_annotated = annotatedTopTable(top_int, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
 top_res_vs_sens_annotated = annotatedTopTable(top_res_vs_ses, anotPackage = 'drosophila2.db') %>% dplyr::arrange(P.Value)
-
-
 ```
 
 
@@ -428,7 +450,7 @@ top_res_vs_sens_annotated = annotatedTopTable(top_res_vs_ses, anotPackage = 'dro
 
 ## Tablas con los genes más diferencialmente expresados por condición
 
-Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 100 genes más diferencialmente expresados por cada comparación.
+Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 1000 genes más diferencialmente expresados por cada comparación.
 
 ```{r show_annotated_tables, echo=FALSE}
 
@@ -473,13 +495,13 @@ vol_plt$plot_d %>% dplyr::group_by(contrast) %>% dplyr::summarise('Unadjusted p<
 res = decideTests(cm)
 sum.res.rows<-apply(abs(res),1,sum)
 res.selected<-res[sum.res.rows!=0,]
-summary(res) %>% kableExtra::kable(caption = 'Differential expression table per contrast') %>% kableExtra::kable_styling(full_width = F)
-vennDiagram (res.selected[,1:3], main="Genes in common #1", cex=0.9)
+summary(res) %>% kableExtra::kable(caption = 'Número de genes diferencialmente expresados por contraste') %>% kableExtra::kable_styling(full_width = F)
+vennDiagram (res.selected[,1:3], main="Genes en común entre contrastes", cex=0.9)
 ```
 
 ## Tabla de anotaciones
 
-```{r annotation_table}
+```{r annotation_table, echo=FALSE}
 if(!file.exists("anotations.html")){
   library(annaffy)
   genesSelected <- rownames(res.selected)
@@ -490,9 +512,11 @@ if(!file.exists("anotations.html")){
 ```
 
 
+#TODO ANOTAR LOS GENES CON MAYOR FOLD CHANGE
+
 ## Perfiles de expresión
 
-```{r expression_profiles, eval=FALSE, include=FALSE}
+```{r expression_profiles, eval=FALSE, include=FALSE, echo=FALSE}
 library(gplots)
 
 selected_probes = rownames(res.selected)
@@ -508,318 +532,220 @@ HMdata
   
 length(rownames(exprs(eset_rma_filtered)))
 length(unique(rownames(exprs(eset_rma_filtered))))
-
-
-
-
 HMdata
-
 geneSymbols
-
 probeNames<-rownames(res)
 probeNames.selected<-probeNames[sum.res.rows!=0]
 exprs2cluster <-exprs(eset_rma)[probeNames.selected,]
 
 heatmap(exprs2cluster, col=rainbow(100), cexCol=0.9)
-
 ```
 
-## Enrichment analsysis
 
-```{r compute_enrichment, echo=FALSE}
+```{r preparing_gene_list, echo=FALSE}
 library(clusterProfiler)
-
-dros = search_kegg_organism('Drosophila melanogaster', by='scientific_name')
 
 p_tibble =tibble::as_tibble(cm$p.value, rownames='PROBEID') %>% 
   dplyr::mutate(res_vs_sens = p.adjust(res_vs_sens, method = 'fdr'),
                 male_vs_female = p.adjust(male_vs_female, method = 'fdr'),
                 int_sex_resvssens = p.adjust(int_sex_resvssens, method = 'fdr')) %>% 
-  tidylog::inner_join(geneSymbols, by='PROBEID')
+  dplyr::inner_join(geneSymbols, by='PROBEID') %>%
+  dplyr::select(-GENENAME, -SYMBOL) %>% 
+  tidyr::pivot_longer(c(-PROBEID, -ENTREZID), names_to = 'contrast', values_to = 'p.fdr')
 
-gene_list_res_vs_sens = p_tibble %>%
-  dplyr::filter(int_sex_resvssens<1) %>% 
-  dplyr::pull(ENTREZID) %>%
-  bitr(., fromType = "ENTREZID",
-        toType = c("ENSEMBL", "SYMBOL"),
-        OrgDb = org.Dm.eg.db)
-  
+fold_tibble = tibble::as_tibble(cm$coefficients, rownames='PROBEID') %>% 
+  dplyr::inner_join(geneSymbols, by='PROBEID') %>%
+  dplyr::select(-GENENAME, -SYMBOL) %>% 
+  tidyr::pivot_longer(c(-PROBEID, -ENTREZID), names_to = 'contrast', values_to = 'fold')
 
-gene_list_int = p_tibble %>%
-  dplyr::filter(int_sex_resvssens<.05) %>% 
-  dplyr::pull(SYMBOL) %>%
-  glue::glue('Dmel_{gn}', gn=.)
+gene_list = dplyr::inner_join(p_tibble, fold_tibble, by=c("PROBEID", "ENTREZID", "contrast"))
 
-gene_list_res_vs_sens = p_tibble %>%
-  dplyr::filter(res_vs_sens<.1) %>% 
-  dplyr::pull(SYMBOL) %>%
-  glue::glue('Dmel_{gn}', gn=.)
 
-enrich_sex = gseGO(gene_list_sex, OrgDb = org.Dm.eg.db)
-enrich_int = enrichKEGG(gene_list_int, organism='dme', pvalueCutoff = .1)
-enrich_res_vs_sens = enrichKEGG(gene_list_res_vs_sens, organism='dme', pvalueCutoff = .1)
-
-data(geneList, package="DOSE")
-geneList
-gene <- names(geneList)[abs(geneList) > 2]
-
-
-
-gene.df <- bitr(p_tibble$ENTREZID, fromType = "ENTREZID",
-        toType = c("ENSEMBL", "SYMBOL"),
-        OrgDb = org.Dm.eg.db)
-geneList
-
-ego2 <- enrichGO(gene         = gene_list_res_vs_sens$ENSEMBL,
-                OrgDb         = org.Dm.eg.db,
-                keyType       = 'ENSEMBL',
-                ont           = "CC",
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.01,
-                qvalueCutoff  = 0.05)
-
-ego2
-```
-
-
-```{r show_enrichment, echo=FALSE}
-goplot(ego2)
-  ```
-
-
-# Introduction
-
-The Tufte handout style is a style that Edward Tufte uses in his books and handouts. Tufte's style is known for its extensive use of sidenotes, tight integration of graphics with text, and well-set typography. This style has been implemented in LaTeX and HTML/CSS^[See Github repositories [tufte-latex](https://github.com/tufte-latex/tufte-latex) and [tufte-css](https://github.com/edwardtufte/tufte-css)], respectively. We have ported both implementations into the [**tufte** package](https://github.com/rstudio/tufte). If you want LaTeX/PDF output, you may use the `tufte_handout` format for handouts, and `tufte_book` for books. For HTML output, use `tufte_html`. These formats can be either specified in the YAML metadata at the beginning of an R Markdown document (see an example below), or passed to the `rmarkdown::render()` function. See @R-rmarkdown for more information about **rmarkdown**.
-
-```yaml
----
-title: "An Example Using the Tufte Style"
-author: "John Smith"
-output:
-  tufte::tufte_handout: default
-  tufte::tufte_html: default
----
-```
-
-There are two goals of this package:
-
-1. To produce both PDF and HTML output with similar styles from the same R Markdown document;
-1. To provide simple syntax to write elements of the Tufte style such as side notes and margin figures, e.g. when you want a margin figure, all you need to do is the chunk option `fig.margin = TRUE`, and we will take care of the details for you, so you never need to think about `\begin{marginfigure} \end{marginfigure}` or `<span class="marginfigure"> </span>`; the LaTeX and HTML code under the hood may be complicated, but you never need to learn or write such code.
-
-If you have any feature requests or find bugs in **tufte**, please do not hesitate to file them to https://github.com/rstudio/tufte/issues. For general questions, you may ask them on StackOverflow: http://stackoverflow.com/tags/rmarkdown.
-
-# Headings
-
-This style provides first and second-level headings (that is, `#` and `##`), demonstrated in the next section. You may get unexpected output if you try to use `###` and smaller headings.
-
-`r newthought('In his later books')`^[[Beautiful Evidence](http://www.edwardtufte.com/tufte/books_be)], Tufte starts each section with a bit of vertical space, a non-indented paragraph, and sets the first few words of the sentence in small caps. To accomplish this using this style, call the `newthought()` function in **tufte** in an _inline R expression_ `` `r ` `` as demonstrated at the beginning of this paragraph.^[Note you should not assume **tufte** has been attached to your R session. You should either `library(tufte)` in your R Markdown document before you call `newthought()`, or use `tufte::newthought()`.]
-
-# Figures
-
-## Margin Figures
-
-Images and graphics play an integral role in Tufte's work. To place figures in the margin you can use the **knitr** chunk option `fig.margin = TRUE`. For example:
-
-```{r fig-margin, fig.margin = TRUE, fig.cap = "MPG vs horsepower, colored by transmission.", fig.width=3.5, fig.height=3.5, cache=TRUE, message=FALSE}
-library(ggplot2)
-mtcars2 <- mtcars
-mtcars2$am <- factor(
-  mtcars$am, labels = c('automatic', 'manual')
-)
-ggplot(mtcars2, aes(hp, mpg, color = am)) +
-  geom_point() + geom_smooth() +
-  theme(legend.position = 'bottom')
-```
-
-Note the use of the `fig.cap` chunk option to provide a figure caption. You can adjust the proportions of figures using the `fig.width` and `fig.height` chunk options. These are specified in inches, and will be automatically scaled down to fit within the handout margin.
-
-## Arbitrary Margin Content
-
-In fact, you can include anything in the margin using the **knitr** engine named `marginfigure`. Unlike R code chunks ```` ```{r} ````, you write a chunk starting with ```` ```{marginfigure} ```` instead, then put the content in the chunk. See an example on the right about the first fundamental theorem of calculus.
-
-```{marginfigure}
-We know from _the first fundamental theorem of calculus_ that for $x$ in $[a, b]$:
-$$\frac{d}{dx}\left( \int_{a}^{x} f(u)\,du\right)=f(x).$$
-```
-
-For the sake of portability between LaTeX and HTML, you should keep the margin content as simple as possible (syntax-wise) in the `marginefigure` blocks. You may use simple Markdown syntax like `**bold**` and `_italic_` text, but please refrain from using footnotes, citations, or block-level elements (e.g. blockquotes and lists) there.
-
-Note: if you set `echo = FALSE` in your global chunk options, you will have to add `echo = TRUE` to the chunk to display a margin figure, for example ```` ```{marginfigure, echo = TRUE} ````.
-
-## Full Width Figures
-
-You can arrange for figures to span across the entire page by using the chunk option `fig.fullwidth = TRUE`.
-
-```{r fig-fullwidth, fig.width = 10, fig.height = 2, fig.fullwidth = TRUE, fig.cap = "A full width figure.", warning=FALSE, message=FALSE, cache=TRUE}
-ggplot(diamonds, aes(carat, price)) + geom_smooth() +
-  facet_grid(~ cut)
-```
-
- Other chunk options related to figures can still be used, such as `fig.width`, `fig.cap`, `out.width`, and so on. For full width figures, usually `fig.width` is large and `fig.height` is small. In the above example, the plot size is $10 \times 2$.
-
-## Main Column Figures
-
-Besides margin and full width figures, you can of course also include figures constrained to the main column. This is the default type of figures in the LaTeX/HTML output.
-
-```{r fig-main, fig.cap = "A figure in the main column.", cache=TRUE}
-ggplot(diamonds, aes(cut, price)) + geom_boxplot()
-```
-
-# Sidenotes
-
-One of the most prominent and distinctive features of this style is the extensive use of sidenotes. There is a wide margin to provide ample room for sidenotes and small figures. Any use of a footnote will automatically be converted to a sidenote. ^[This is a sidenote that was entered using a footnote.] 
-
-If you'd like to place ancillary information in the margin without the sidenote mark (the superscript number), you can use the `margin_note()` function from **tufte** in an inline R expression. `r margin_note("This is a margin note.  Notice that there is no number preceding the note.")` This function does not process the text with Pandoc, so Markdown syntax will not work here. If you need to write anything in Markdown syntax, please use the `marginfigure` block described previously.
-
-# References
-
-References can be displayed as margin notes for HTML output. For example, we can cite R here [@R-base]. To enable this feature, you must set `link-citations: yes` in the YAML metadata, and the version of `pandoc-citeproc` should be at least 0.7.2. You can always install your own version of Pandoc from http://pandoc.org/installing.html if the version is not sufficient. To check the version of `pandoc-citeproc` in your system, you may run this in R:
-
-```{r eval=FALSE}
-system2('pandoc-citeproc', '--version')
-```
-
-If your version of `pandoc-citeproc` is too low, or you did not set `link-citations: yes` in YAML, references in the HTML output will be placed at the end of the output document.
-
-# Tables
-
-You can use the `kable()` function from the **knitr** package to format tables that integrate well with the rest of the Tufte handout style. The table captions are placed in the margin like figures in the HTML output.
-
-```{r}
-knitr::kable(
-  mtcars[1:6, 1:6], caption = 'A subset of mtcars.'
-)
-```
-
-# Block Quotes
-
-We know from the Markdown syntax that paragraphs that start with `>` are converted to block quotes. If you want to add a right-aligned footer for the quote, you may use the function `quote_footer()` from **tufte** in an inline R expression. Here is an example:
-
-> "If it weren't for my lawyer, I'd still be in prison. It went a lot faster with two people digging."
->
-> `r tufte::quote_footer('--- Joe Martin')`
-
-Without using `quote_footer()`, it looks like this (the second line is just a normal paragraph):
-
-> "Great people talk about ideas, average people talk about things, and small people talk about wine."
->
-> --- Fran Lebowitz
-
-# Responsiveness
-
-The HTML page is responsive in the sense that when the page width is smaller than 760px, sidenotes and margin notes will be hidden by default. For sidenotes, you can click their numbers (the superscripts) to toggle their visibility. For margin notes, you may click the circled plus signs to toggle visibility.
-
-# More Examples
-
-The rest of this document consists of a few test cases to make sure everything still works well in slightly more complicated scenarios. First we generate two plots in one figure environment with the chunk option `fig.show = 'hold'`:
-
-```{r fig-two-together, fig.cap="Two plots in one figure environment.", fig.show='hold', cache=TRUE, message=FALSE}
-p <- ggplot(mtcars2, aes(hp, mpg, color = am)) +
-  geom_point()
-p
-p + geom_smooth()
-```
-
-Then two plots in separate figure environments (the code is identical to the previous code chunk, but the chunk option is the default `fig.show = 'asis'` now):
-
-```{r fig-two-separate, ref.label='fig-two-together', fig.cap=sprintf("Two plots in separate figure environments (the %s plot).", c("first", "second")), cache=TRUE, message=FALSE}
-```
-
-You may have noticed that the two figures have different captions, and that is because we used a character vector of length 2 for the chunk option `fig.cap` (something like `fig.cap = c('first plot', 'second plot')`).
-
-Next we show multiple plots in margin figures. Similarly, two plots in the same figure environment in the margin:
-
-```{r fig-margin-together, fig.margin=TRUE, fig.show='hold', fig.cap="Two plots in one figure environment in the margin.", fig.width=3.5, fig.height=2.5, cache=TRUE}
-p
-p + geom_smooth(method = 'lm')
-```
-
-Then two plots from the same code chunk placed in different figure environments:
-
-```{r fig-margin-separate, fig.margin=TRUE, fig.cap=sprintf("Two plots in separate figure environments in the margin (the %s plot).", c("first", "second")), fig.width=3.5, fig.height=2.5, cache=TRUE}
-knitr::kable(head(iris, 15))
-p
-knitr::kable(head(iris, 12))
-p + geom_smooth(method = 'lm')
-knitr::kable(head(iris, 5))
-```
-
-We blended some tables in the above code chunk only as _placeholders_ to make sure there is enough vertical space among the margin figures, otherwise they will be stacked tightly together. For a practical document, you should not insert too many margin figures consecutively and make the margin crowded. 
-
-You do not have to assign captions to figures. We show three figures with no captions below in the margin, in the main column, and in full width, respectively.
-
-```{r fig-nocap-margin, fig.margin=TRUE, fig.width=3.5, fig.height=2, cache=TRUE}
-# a boxplot of weight vs transmission; this figure
-# will be placed in the margin
-ggplot(mtcars2, aes(am, wt)) + geom_boxplot() +
-  coord_flip()
-```
-```{r fig-nocap-main, cache=TRUE}
-# a figure in the main column
-p <- ggplot(mtcars, aes(wt, hp)) + geom_point()
-p
-```
-```{r fig-nocap-fullwidth, fig.fullwidth=TRUE, fig.width=10, fig.height=3, cache=TRUE}
-# a fullwidth figure
-p + geom_smooth(method = 'lm') + facet_grid(~ gear)
-```
-
-# Some Notes on Tufte CSS
-
-There are a few other things in Tufte CSS that we have not mentioned so far. If you prefer `r sans_serif('sans-serif fonts')`, use the function `sans_serif()` in **tufte**. For epigraphs, you may use a pair of underscores to make the paragraph italic in a block quote, e.g.
-
-> _I can win an argument on any topic, against any opponent. People know this, and steer clear of me at parties. Often, as a sign of their great respect, they don't even invite me._
->
-> `r quote_footer('--- Dave Barry')`
-
-We hope you will enjoy the simplicity of R Markdown and this R package, and we sincerely thank the authors of the Tufte-CSS and Tufte-LaTeX projects for developing the beautiful CSS and LaTeX classes. Our **tufte** package would not have been possible without their heavy lifting.
-
-You can turn on/off some features of the Tufte style in HTML output. The default features enabled are:
-
-```yaml
-output:
-  tufte::tufte_html:
-    tufte_features: ["fonts", "background", "italics"]
-```
-
-If you do not want the page background to be lightyellow, you can remove `background` from `tufte_features`. You can also customize the style of the HTML page via a CSS file. For example, if you do not want the subtitle to be italic, you can define
-
-```css
-h3.subtitle em {
-  font-style: normal;
+to_fold = function(df){
+  sort(tibble::deframe(df %>% dplyr::select(ENTREZID, fold)), decreasing = T)
 }
+
+to_entrezid = function(df){
+  df %>% dplyr::pull(ENTREZID)
+}
+
+contrast_a = 'int_sex_resvssens'
+
+enrich_kegg = function(contrast_a, gene_list){
+  gene_list_contrast = to_entrezid(gene_list %>% dplyr::filter(contrast == contrast_a, p.fdr<.1))
+  gene_list_kegg = bitr_kegg(gene_list_contrast, fromType = 'ncbi-geneid', toType = 'kegg', organism = 'dme')$kegg
+  enrich_res = enrichKEGG(gene_list_kegg, organism='dme', pvalueCutoff = .1, keyType = 'kegg') # Ok con el ncbi-geneid! https://www.genome.jp/dbget-bin/www_bget?dme:Dmel_CG14941 Ejemplo
+  return(enrich_res)
+}
+
+contrast='int_sex_resvssens'
+
+gse_kegg = function(contrast_a, gene_list){
+  gene_list_contrast = to_fold(gene_list %>% dplyr::filter(contrast ==contrast_a, p.fdr<.1))
+  names(gene_list_contrast) = bitr_kegg(names(gene_list_contrast), fromType = 'ncbi-geneid', toType = 'kegg', organism = 'dme')$kegg
+  enrich_res = gseKEGG(gene_list_contrast, organism='dme', pvalueCutoff = .1, keyType = 'kegg') # Ok con el ncbi-geneid! https://www.genome.jp/dbget-bin/www_bget?dme:Dmel_CG14941 Ejemplo
+  return(enrich_res)
+}
+
+library(org.Dm.eg.db)
+
+enrich_go = function(contrast_a, gene_list){
+  gene_list_contrast = to_entrezid(gene_list %>% dplyr::filter(contrast == contrast_a, p.fdr<.1))
+  
+  enrich_res = enrichGO(gene          = gene_list_contrast,
+                        OrgDb         = org.Dm.eg.db,
+                        keyType       = 'ENTREZID',
+                        ont           = "CC",
+                        pAdjustMethod = "BH",
+                        pvalueCutoff  = 0.01,
+                        qvalueCutoff  = 0.05)
+    return(enrich_res)
+}
+
+
+gse_go = function(contrast_a, gene_list){
+  
+  gene_list_contrast = to_fold(gene_list %>% dplyr::filter(contrast ==contrast_a, p.fdr<.1))
+  
+  enrich_res = gseGO(geneList     = gene_list_contrast,
+                     OrgDb        = org.Dm.eg.db,
+                     keyType      = 'ENTREZID',
+                     ont          = "CC",
+                     nPerm        = 1000,
+                     minGSSize    = 100,
+                     maxGSSize    = 500,
+                     pvalueCutoff = 0.05,
+                     verbose      = FALSE)
+  return(enrich_res)
+}
+
 ```
 
-in, say, a CSS file `my_style.css` (under the same directory of your Rmd document), and apply it to your HTML output via the `css` option, e.g.,
+```{r plot_functions, echo=FALSE}
 
-```yaml
-output:
-  tufte::tufte_html:
-    tufte_features: ["fonts", "background"]
-    css: "my_style.css"
+plot_enrich_ORA = function(enrich_df, contrast){
+  if(nrow(enrich_df)==0){
+    warning('No Enriched Pathways detected')
+    return()
+  }
+  p1 = heatplot(enrich_df) + labs(title=paste(contrast))
+  p2 = barplot(enrich_df)
+  cowplot::plot_grid(p1,p2, labels = 'AUTO', rel_widths = c(3, 2))
+}
+
+plot_enrich_GSE = function(enrich_df, contrast){
+  if(nrow(enrich_df)==0){
+    warning('No Enriched Pathways detected')
+    return()
+  }
+  p1 = heatplot(enrich_df) + labs(title=paste(contrast))
+  cowplot::plot_grid(p1, labels = 'AUTO')
+}
+
 ```
 
-There is also a variant of the Tufte style in HTML/CSS named "[Envisoned CSS](http://nogginfuel.com/envisioned-css/)". This style can be used by specifying the argument `tufte_variant = 'envisioned'` in `tufte_html()`^[The actual Envisioned CSS was not used in the **tufte** package. We only changed the fonts, background color, and text color based on the default Tufte style.], e.g.
 
-```yaml
-output:
-  tufte::tufte_html:
-    tufte_variant: "envisioned"
+# Gene Ontology
+
+Explicación de para que vale la Gene Ontology
+
+## Over-representation analysis
+
+Solo cálcula si es por azar que los genes sobre representados aparecen más en un pathway que en otro, con un fisher o un binomial, por azar deberían de aparecer, pero en realidad aparecen.
+```{r compute_over_go_ORA, echo=FALSE}
+enrich_go_int = enrich_go('int_sex_resvssens', gene_list)
+enrich_go_sens = enrich_go('res_vs_sens', gene_list)
+enrich_go_sex = enrich_go('male_vs_female', gene_list)
 ```
 
-To see the R Markdown source of this example document, you may follow [this link to Github](https://github.com/rstudio/tufte/raw/master/inst/rmarkdown/templates/tufte_html/skeleton/skeleton.Rmd), use the wizard in RStudio IDE (`File -> New File -> R Markdown -> From Template`), or open the Rmd file in the package:
-
-```{r eval=FALSE}
-file.edit(
-  tufte:::template_resources(
-    'tufte_html', '..', 'skeleton', 'skeleton.Rmd'
-  )
-)
+```{r show_go_table_ORA, echo=FALSE}
+tibble::tibble(Contrast = c('int_sex_resvssens', 'res_vs_sens', 'male_vs_female'),
+               'Over-represented pathways' = c(nrow(enrich_go_int), nrow(enrich_go_sens), nrow(enrich_go_sex))) %>%
+  kableExtra::kable() %>% kableExtra::kable_styling(full_width = F)
 ```
 
-This document is also available in [Chinese](http://rstudio.github.io/tufte/cn/), and its `envisioned` style can be found [here](http://rstudio.github.io/tufte/envisioned/).
+```{r show_go_ORA, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="KEGG Over Representation Results",fig.fullwidth = TRUE}
 
-```{r bib, include=FALSE}
-# create a bib file for the R packages used in this document
-knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+plot_enrich_ORA(enrich_go_int, 'Interaction between sex and resistant vs. sensible')
+plot_enrich_ORA(enrich_go_sex, 'Male vs. Female')
+plot_enrich_ORA(enrich_go_sens, 'Resistante vs. Sensible')
+
 ```
+
+## Gene Set enrichment analysis
+
+Aquí el approach es un poco distinto porque tenemos en cuenta si se están up o down regulated todos los metabolitos a cañón ahí dentro.
+
+
+```{r compute_go_GSE, echo=FALSE}
+ gse_go_int = gse_go('int_sex_resvssens', gene_list)
+ gse_go_sens = gse_go('res_vs_sens', gene_list)
+ gse_go_sex = gse_go('male_vs_female', gene_list)
+```
+
+```{r show_go_table_GSE, echo=FALSE}
+tibble::tibble(Contrast = c('int_sex_resvssens', 'res_vs_sens', 'male_vs_female'),
+               'Over-represented pathways' = c(nrow(gse_go_int), nrow(gse_go_sens), nrow(gse_go_sex))) %>%
+  kableExtra::kable() %>% kableExtra::kable_styling(full_width = F)
+```
+
+```{r show_go_GSE, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="KEGG Over Representation Results",fig.fullwidth = TRUE}
+
+plot_enrich_GSE(gse_go_int, 'Interaction between sex and resistant vs. sensible')
+plot_enrich_GSE(gse_go_sex, 'Male vs. Female')
+plot_enrich_GSE(gse_go_sens, 'Resistante vs. Sensible')
+
+```
+
+# KEGG
+
+```{r, echo=FALSE}
+dros = search_kegg_organism('Drosophila melanogaster', by='scientific_name')
+```
+
+
+## Over-representation analysis
+
+```{r compute_over_kegg_ORA, echo=FALSE}
+enrich_kegg_int = enrich_kegg('int_sex_resvssens', gene_list)
+enrich_kegg_sens = enrich_kegg('res_vs_sens', gene_list)
+enrich_kegg_sex = enrich_kegg('male_vs_female', gene_list)
+```
+
+```{r show_kegg_table_ORA, echo=FALSE}
+tibble::tibble(Contrast = c('int_sex_resvssens', 'res_vs_sens', 'male_vs_female'),
+               'Over-represented pathways' = c(nrow(enrich_kegg_int), nrow(enrich_kegg_sens), nrow(enrich_kegg_sex))) %>%
+  kableExtra::kable() %>% kableExtra::kable_styling(full_width = F)
+```
+
+```{r show_kegg_ORA, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="KEGG Over Representation Results",fig.fullwidth = TRUE}
+
+plot_enrich_ORA(enrich_kegg_int, 'Interaction between sex and resistant vs. sensible')
+plot_enrich_ORA(enrich_kegg_sex, 'Male vs. Female')
+plot_enrich_ORA(enrich_kegg_sens, 'Resistante vs. Sensible')
+
+```
+
+
+## Gene Set enrichment analysis
+
+
+```{r compute_kegg_GSE, echo=FALSE}
+ gse_kegg_int = gse_kegg('int_sex_resvssens', gene_list)
+ gse_kegg_sens = gse_kegg('res_vs_sens', gene_list)
+ gse_kegg_sex = gse_kegg('male_vs_female', gene_list)
+```
+```{r show_kegg_table_GSE, echo=FALSE}
+tibble::tibble(Contrast = c('int_sex_resvssens', 'res_vs_sens', 'male_vs_female'),
+               'Over-represented pathways' = c(nrow(gse_kegg_int), nrow(gse_kegg_sens), nrow(gse_kegg_sex))) %>%
+  kableExtra::kable() %>% kableExtra::kable_styling(full_width = F)
+```
+
+```{r show_kegg_GSE, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="KEGG Over Representation Results",fig.fullwidth = TRUE}
+
+plot_enrich_GSE(gse_kegg_int, 'Interaction between sex and resistant vs. sensible')
+plot_enrich_GSE(gse_kegg_sex, 'Male vs. Female')
+plot_enrich_GSE(gse_kegg_sens, 'Resistante vs. Sensible')
+
+```
+
