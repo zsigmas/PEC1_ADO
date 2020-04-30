@@ -6,7 +6,7 @@ date: "`r Sys.Date()`"
 output:
     rmdformats::readthedown:
     highlight: kate
-bibliography: skeleton.bib
+bibliography: references.bib
 link-citations: yes
 ---
 
@@ -109,25 +109,35 @@ adj_p = ggplot(plot_d, aes(x=coef, y=minus_log_10_adj_p, color=sig_adj_p)) +
 
 ```
 
+# Información sobre el estudio y objetivos
 
-# Información sobre el dataset
+En el estudio se han seleccionado artificialmente durante 35 generaciones moscas, machos y hembras, que eran resistentes o sensibles al etanol y un grupo control con moscas seleccionadas al azar. Los grupos de moscas se seleccionaron en dos líneas diferentes. Este dataset corresponde al estudio [*Phenotypic and transcriptional response to selection for alcohol sensitivity in Drosophila melanogaster*](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2246305/).
 
-Vamos a utilizar el dataset `r GEO_ID`. Este dataset corresponde al estudio *Phenotypic and transcriptional response to selection for alcohol sensitivity in Drosophila melanogaster*.
+Aunque en el estudio original se analizan más factores, para esta práctica simularemos que el investigador nos ha pedido que investiguemos:
 
-|Información del dataset   |
+- Main Effect Macho vs. Hembra
+- Single Effect Resistente vs Sensible
+- Interacción Sexo vs (Resistente vs Sensible)
+
+*Nota*: Seguramente en este informe hemos incluido un poco de información en exceso y existen alguna información que quizá no fuera particularmente relevante para el investigador, sin embargo por completitud vamos a incluir un muy breve resumen de lo que haremos en cada paso y des las conclusiones que sacamos en cada uno de ellos.
+
+## Dataset
+
+|Información del dataset|
 |-----+-------|
-| Organismo | [Drosophila Melanogaster](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=7227)|
-| Número de muestras | 24 (15 individuos por muestra)|
-|Grupos| Macho Control (x2 Rep. Biológicas x2 Líneas)|
+|**Gene Expression Omnibus ID**|[`r GEO_ID`]^|
+|**Organismo**| [Drosophila Melanogaster](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=7227)|
+|**Número de muestras**| 24 (15 individuos por muestra)|
+|**Grupos**| Macho Control (x2 Rep. Biológicas x2 Líneas)|
 | | Hembra Control (x2 Rep. Biológicas x2 Líneas)|
 | | Macho Sensible (x2 Rep. Biológicas x2 Líneas)|
 | | Hembra Sensible (x2 Rep. Biológicas x2 Líneas)|
 | | Macho Resistente (x2 Rep. Biológicas x2 Líneas)|
 | | Hembra Resistente (x2 Rep. Biológicas x2 Líneas)|
-|Número de características | 18952 |
-| Plataforma| [Drosophila_2] Affymetrix Drosophila Genome 2.0 Array|
+|**Número de características** | 18952 |
+|**Plataforma**| [Drosophila_2] Affymetrix Drosophila Genome 2.0 Array|
 | |[GPL1322](`r PLATFORM_URL`)|
-|Tipo de muestra| *in situ oligonucleotide* |
+|**Tipo de muestra**| *in situ oligonucleotide* |
 
 
 ```{r readCELFiles, echo=FALSE, cache=TRUE, warning=FALSE, message=FALSE}
@@ -161,22 +171,21 @@ if(!file.exists('raw_data.Rdata')){
 # Cargado de datos crudos
 
 En este caso hemos descargado todos los archivos .CEL del dataset [`r GEO_ID`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE7614).
-También hemos consultado a que grupo pertenece cada una de las 24 muestras que contiene el dataset. Hemos preparado también un archivo que contiene toda la información referente a los grupos y las muestras y lo hemos cargado en memoria.
+También hemos consultado a que grupo pertenece cada una de las 24 muestras que contiene el dataset.
+Hemos preparado también un archivo que contiene toda la información referente a los grupos y las muestras y lo hemos cargado en memoria.
 
 ```{r show_targets, echo=FALSE}
 DT::datatable(targets, caption='Información de cada una de las muestras', filter='top')
 ```
 
-**short_name** sigue la convención c(ontrol)/r(esistant)/s(ensible)  m(ale)/f(emale). Los números separan las diferentes samples y las grupos de los que salieron (ver información sobre el dataset).
+**short_name** sigue la convención c(ontrol)/r(esistant)/s(ensible)  m(ale)/f(emale). Los números separan las diferentes samples y las grupos de los que salieron las muestras (ver información sobre el dataset).
 
-Luego hemos generado un ExpressionFeatureSet juntando los archivos .CEL y annotatedDataFrame que contiene el *phenoData*
+Luego hemos generado un ExpressionFeatureSet juntando los archivos .CEL y annotatedDataFrame que contiene el *phenoData* con un total **`r nrow(raw_data)`** filas/sondas y **`r ncol(raw_data)`** muestras.
 ```{r show_raw_data, echo=FALSE}
 
 ```
 
-Tenemos en total `r nrow(raw_data)` filas/sondas y `r ncol(raw_data)` muestras.
-
-
+  ---
 # Control de calidad de los datos crudos
 
 Para realizar un control de la calidad de los datos crudos vamos utilizar la libreria Array Quality Metrics y affyPLM.
@@ -184,11 +193,15 @@ Para realizar un control de la calidad de los datos crudos vamos utilizar la lib
 Lo haremos de dos maneras diferentes, primero sin transformar los datos con logaritmo de la intensidad y luego haciéndolo.
 
 ```{r compute_array_quality_metrics, echo=FALSE}
-# Lo hacemos con el Array Quality Metrics, queda comentados para no ejecutarlos continuamente
-# Luego sacaremos los gráficos de ahí
-# arrayQualityMetrics::arrayQualityMetrics(raw_data, intgroup = c('sex', 'selection', 'line'), outdir = 'pre_norm')
-# arrayQualityMetrics::arrayQualityMetrics(raw_data, intgroup = c('sex', 'selection', 'line'), outdir = 'pre_norm_log', do.logtransform = T)
-# exprs(raw_data)
+
+if(!dir.exists('pre_norm')){
+  arrayQualityMetrics::arrayQualityMetrics(raw_data, intgroup = c('sex', 'selection', 'line'), outdir = 'pre_norm')
+}
+
+if(!dir.exists('pre_norm_log')){
+  arrayQualityMetrics::arrayQualityMetrics(raw_data, intgroup = c('sex', 'selection', 'line'), outdir = 'pre_norm_log', do.logtransform = T)
+}
+
 ```
 
 ## Sin transformar
@@ -299,7 +312,7 @@ No parece que ninguno de los arrays se desvíe particularmente en ninguna de las
 
 # Normalización
 
-Procedemos ahora a normalizar los datos con el método *RMA*.
+Procedemos ahora a normalizar los datos con el método *RMA* del paquete *oligo*.
 
 Durante este paso el algoritmo:
 
@@ -318,7 +331,9 @@ if(!file.exists('rma_normalized.Rda')){
 ```
 
 ```{r compute_AQM_rma, echo=FALSE}
-# arrayQualityMetrics::arrayQualityMetrics(eset_rma, intgroup = c('sex', 'selection', 'line'), outdir = 'norm', force=T)
+if(!dir.exists('norm')){
+ arrayQualityMetrics::arrayQualityMetrics(eset_rma, intgroup = c('sex', 'selection', 'line'), outdir = 'norm', force=T)
+}
 ```
 
 Una vez normalizado vamos a volver a realizar un análisis de calidad de los datos
@@ -345,7 +360,6 @@ Solo existen dos detalles destacables, uno es la diferencia entre patrones de in
 
 Los datos parecen correctos, por tanto no es necesaria ninguna acción.
 
-
 # Filtrado
 
 Vamos a filtrar las probes que no tengan entrada en y las que corresponden a las sondas de control de Affymetrix. Vamos a hacerlo de manera manual utilizando la base de datos correspondiente al chip: *Affymetrix Drosophila Genome 2.0 Array*, en el paquete *'drosophila2.db'*. Lo que haremos será eliminar todas las *features* cuyo entrada *EntrezID* sea *NA*.
@@ -363,7 +377,7 @@ De esta manera pasamos de tener `r nrow(eset_rma)` *features* a `r nrow(eset_rma
 
 # Modelo y contrastes
 
-Estamos ante un diseño de 3x2, en este caso vamos a simular que estamos interesados en las comparaciones:
+Estamos ante un diseño de ANOVA 3x2, en este caso vamos a simular que estamos interesados en las comparaciones:
 
 - Main Effect Macho vs. Hembra
 - Single Effect Resistente vs Sensible
@@ -388,7 +402,7 @@ top_int = topTable(cm, coef='int_sex_resvssens', adjust='fdr', number=1000, sort
 
 Vamos a ajustar un modelo lineal con Limma y la siguiente matriz de diseño
 
-```{r show_design_matrix, echo=FALSE, fig.cap='Horizontal axis indicates the term of the design matrix. Vertical axis indicate the short name of the sample'}
+```{r show_design_matrix, echo=FALSE, fig.cap='El eje horizontal indica los términos de la matriz de diseño. El eje vertical indica el nombre de cada muestra'}
 
 # heatmap(design_matrix, Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('black', 'white'))
 
@@ -416,7 +430,7 @@ ggplot(dm_heat, aes(x=group, y=sample, fill=val)) +
 
 Una vez ajustado el modelo calculamos los siguientes contrastes
 
-```{r show_contrast_matrix, echo=FALSE}
+```{r show_contrast_matrix, echo=FALSE, fig.cap='El eje horizontal indica cada uno de los términos del modelo. El eje verticaln indica cada uno de los contraste que vamos a utilizar.'}
 # contrast_matrix %>% kableExtra::kable(caption='Contrast Matrix') %>% kableExtra::kable_styling()
 
 # heatmap(t(contrast_matrix), Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('#FFFFFF', '#666666', '#000000'))
@@ -461,9 +475,9 @@ top_res_vs_sens_annotated = annotatedTopTable(top_res_vs_ses, anotPackage = 'dro
 
 ## Genes diferencialmente expresados entre condiciones
 
-Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 1000 genes más diferencialmente expresados por cada comparación.
+Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 1000 genes más significativos por cada comparación.
 
-Corrección por multiples comparaciones False Discovery Rate Benajin y Hochsberg CITA!
+Se incluyen los p-valores ajustados usando false discovery rate [@fdrben].
 
 ```{r show_annotated_tables, echo=FALSE}
 pretty_top_table = function(top_table){
@@ -522,7 +536,7 @@ Los resultados que aparecen aquí están corregidos al p<.05, con el p-valor cor
 
 ```{r venn_diagram, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=6, fig.width=6, out.height='100%', fig.cap='Diagrama de Venn que muestra el número de contrastes significativos encada uno de los contrastes y sus intersecciones.'}
 
-res = decideTests(cm)
+res = decideTests(cm, p.value =0.001) 
 sum.res.rows<-apply(abs(res),1,sum)
 res.selected<-res[sum.res.rows!=0,]
 summary(res) %>% kableExtra::kable(caption = 'Número de genes diferencialmente expresados por contraste') %>% kableExtra::kable_styling(full_width = F)
@@ -536,18 +550,14 @@ Se ha generado (aunque no sea accesible desde el documento, si que está en el r
 *Archivo: 'annotations.html'*
 
 ```{r annotation_table, echo=FALSE}
-if(!file.exists("anotations.html")){
+if(!file.exists("results/anotations.html")){
   genesSelected <- rownames(res.selected)
   at <- aafTableAnn(genesSelected, "drosophila2.db")
-  saveHTML (at, "anotations.html","Annotations for selected genes")
+  saveHTML (at, "results/anotations.html","Annotations for selected genes")
   }
 
 ```
 
-
-# TODO ANOTAR LOS GENES CON MAYOR FOLD CHANGE
-
-## Perfiles de expresión
 
 ```{r expression_profiles, eval=FALSE, include=FALSE, echo=FALSE}
 x
@@ -576,6 +586,7 @@ heatmap(exprs2cluster, col=rainbow(100), cexCol=0.9)
 
 # Análisis de enriquecimiento
 
+  - Hemos utilizado el paquete clusterProfiler
   - Para estos análisis hemos seleccionado todos aquellos genes cuyo p-valor corregido con FDR es menor a .1
   - Hemos realizado un análisis por contraste
   - Hemos utilizado las bases de datos KEGG y GO
@@ -595,6 +606,14 @@ heatmap(exprs2cluster, col=rainbow(100), cexCol=0.9)
   - [emapplot](https://yulab-smu.github.io/clusterProfiler-book/chapter12.html#enrichment-map)
   - [ridgeplot](https://yulab-smu.github.io/clusterProfiler-book/chapter12.html#ridgeline-plot-for-expression-distribution-of-gsea-result)
   
+En este sección utilizaremos dos tipos de análisis sobre dos bases de datos diferentes:
+
+  - Overrepresentation y Gene Set Enrichment Analysis
+  - Gene Ontology [GO](http://geneontology.org/docs/go-enrichment-analysis/) y Kyoto Encyclopedia of Genes and Genomes, [KEGG](https://www.genome.jp/kegg/)
+
+## Interpretación de los resultados
+
+Para los resultados de cada uno de estos análisis presentamos el mismo conjunto de tablas y resultados. Una tabla que muestra los resultados obtenidos, con información relevante sobre cada uno de ellos y un enlace a cada uno de los elementos de la GO o KEGG encontrados. Los tipos de gráficos varían según el tipo de análisis.
 
 ```{r preparing_gene_list, echo=FALSE}
 
@@ -715,16 +734,30 @@ plot_enrich_GSE = function(enrich_df, contrast, type){
   plot(p2)
 }
 
+enrich_go_table = function(enrich_go){
+  enrich_go %>% tibble::as_tibble() %>% dplyr::mutate(ID = glue::glue("<a href='http://amigo.geneontology.org/amigo/term/{ID}' target='_blank'>{ID}</a>",ID=ID)) %>% 
+  dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
+  DT::datatable(escape=FALSE)
+}
+
+
+enrich_kegg_table = function(enrich_kegg){
+  enrich_kegg  %>% tibble::as_tibble() %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(browseKEGG(x=gse_kegg_sens, pathID=x),1,-2)}),
+                                                         Description = paste0("<a href='",Link,"' target='_blank'>",Description,"</a>")) %>% 
+    dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
+    dplyr::select(-Link) %>% 
+    DT::datatable(escape=FALSE)
+}
+
 ```
 
 
 ## Gene Ontology
 
-Explicación de para que vale la Gene Ontology
+En 
 
 ### Over-representation analysis
 
-Solo cálcula si es por azar que los genes sobre representados aparecen más en un pathway que en otro, con un fisher o un binomial, por azar deberían de aparecer, pero en realidad aparecen.
 ```{r compute_over_go_ORA, echo=FALSE}
 enrich_go_int = suppressMessages(suppressWarnings(enrich_go('int_sex_resvssens', gene_list)))
 enrich_go_sens = suppressMessages(suppressWarnings(enrich_go('res_vs_sens', gene_list)))
@@ -741,25 +774,35 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 En este caso aparecen muchos genes relacionados con cada ruta y la visualización se hace un poco complicada. Un [upsetplot](https://yulab-smu.github.io/clusterProfiler-book/chapter12.html#upset-plot) hubiese sido más útil, pero en este caso el paquete daba un error de compatibilidad que no he sido capaz de solucionar.
 
-```{r show_go_ORA_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
+```{r show_go_ORA_table_sex, echo=FALSE}
+enrich_go_table(enrich_go_sex)
+```
+
+```{r show_go_ORA_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_go_sex, 'Male vs. Female', type='GO')
 ```
 
 #### Resistente vs. Sensible
 
-```{r show_go_ORA_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
+```{r show_go_ORA_table_res, echo=FALSE}
+enrich_go_table(enrich_go_sens)
+```
+
+```{r show_go_ORA_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_go_sens, 'Resistente vs. Sensible', type='GO')
 ```
 
 #### Interacción Sexo y (Resistente vs. Sensible)
 
-```{r show_go_ORA_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
+```{r show_go_ORA_table_int, echo=FALSE}
+enrich_go_table(enrich_go_int)
+```
+
+```{r show_go_ORA_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de sobrerrepresentación para GO",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_go_int, 'Interaction between sex and resistant vs. sensible', type='GO')
 ```
 
 ### Gene Set enrichment analysis
-
-Aquí el approach es un poco distinto porque tenemos en cuenta si se están up o down regulated todos los metabolitos a cañón ahí dentro.
 
 ```{r compute_go_GSE, echo=FALSE}
  gse_go_int = suppressMessages(suppressWarnings(gse_go('int_sex_resvssens', gene_list)))
@@ -775,17 +818,29 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 #### Macho vs. Hembra
 
+```{r show_go_GSE_table_sex, echo=FALSE}
+enrich_go_table(gse_go_sex)
+```
+
 ```{r show_go_GSE_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de GSE para GO",fig.fullwidth = TRUE}
 plot_enrich_GSE(gse_go_sex, 'Macho vs. Hembra', type='GO')
 ```
 
 #### Resistente vs. Sensible
 
+```{r show_go_GSE_table_res, echo=FALSE}
+enrich_go_table(gse_go_sens)
+```
+
 ```{r show_go_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de GSE para GO",fig.fullwidth = TRUE}
 plot_enrich_GSE(gse_go_sens, 'Resistente vs. Sensible', type='GO')
 ```
 
 #### Interacción Sexo y (Resistente vs. Sensible)
+
+```{r show_go_GSE_table_int, echo=FALSE}
+enrich_go_table(gse_go_int)
+```
 
 ```{r show_go_GSE_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', out.height='100%', fig.cap="Resultados de GSE para GO",fig.fullwidth = TRUE}
   plot_enrich_GSE(gse_go_int, 'Interacción Sexo y (Resistente vs. Sensible)', type='GO')
@@ -814,17 +869,31 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 #### Macho vs. Hembra
 
+```{r show_kegg_ORA_sex_table, echo=FALSE,}
+enrich_kegg_table(enrich_kegg_sex)
+```
+
+
 ```{r show_kegg_ORA_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_kegg_sex, 'Macho vs. Hembra', type='KEGG')
+  
 ```
 
 #### Resistente vs. Sensible
+
+```{r show_kegg_ORA_res_table, echo=FALSE,}
+enrich_kegg_table(enrich_kegg_sens)
+```
 
 ```{r show_kegg_ORA_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
 ```
 
 #### Interacción Sexo y (Resistente vs. Sensible)
+
+```{r show_kegg_ORA_int_table, echo=FALSE,}
+enrich_kegg_table(enrich_kegg_int)
+```
 
 ```{r show_kegg_ORA_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)', type='KEGG')
@@ -848,23 +917,22 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 #### Macho vs. Hembra
 
+```{r show_kegg_GSE_sex_table, echo=FALSE,}
+enrich_kegg_table(gse_kegg_sex)
+```
+
 ```{r show_kegg_GSE_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
 plot_enrich_GSE(gse_kegg_sex, 'Macho vs. Hembra', type='KEGG')
 ```
 
 #### Resistente vs. Sensible
 
-```{r show_kegg_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
-plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
+```{r show_kegg_GSE_res_table, echo=FALSE,}
+enrich_kegg_table(gse_kegg_sens)
 ```
 
-
-```{r show_kegg_GSE_res_table, echo=FALSE}
-gse_kegg_sens %>% tibble::as_tibble() %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(browseKEGG(x=gse_kegg_sens, pathID=x),1,-2)}),
-                                                        Description = paste0("<a href='",Link,"' target='_blank'>",Description,"</a>")) %>% 
-  dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
-  dplyr::select(-Link) %>% 
-  DT::datatable(escape=FALSE)
+```{r show_kegg_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
+plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
 ```
 
 
@@ -878,11 +946,74 @@ gse_kegg_sens %>% tibble::as_tibble() %>% dplyr::mutate(Link = lapply(ID, functi
 #          species='dme')
 ```
 
+**Metabolism of xenobiotics by cytochrome P450 pathway**
+
 ![Metabolism of xenobiotics by cytochrome P450](./dme00980.pathview.png)
+
+**Drug metabolism - cytochrome P450**
 ![Drug metabolism - cytochrome P450](./dme00982.pathview.png)
 
 #### Interacción Sexo y (Resistente vs. Sensible)
 
+```{r show_kegg_GSE_int_table, echo=FALSE,}
+enrich_kegg_table(gse_kegg_int)
+```
+
 ```{r show_kegg_GSE_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
 plot_enrich_GSE(gse_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)', type='KEGG')
 ```
+
+# Archivos generados
+
+Conjunto de archivos generados a lo largo del análisis:
+
+```{r}
+save_dose_result = function(enrich_df, fname){
+  enrich_df %>% tibble::as_tibble() %>% readr::write_csv(x = ., path = paste0(fname,'.csv'))
+}
+
+save_exprs = function(enrich_df, fname){
+  save(enrich_df, file = paste0(fname,'.Rdata'))
+  enrich_df %>% exprs() %>% tibble::as_tibble() %>% readr::write_csv(path = paste0(fname,'.csv'))
+}
+
+# Normalized-data
+save_exprs(eset_rma, 'results/normalized_data')
+
+# Normalized-Filtered-data
+save_exprs(eset_rma_filtered, 'results/normalized_filtered_data')
+
+# Tables
+top_sex_annotated %>% readr::write_csv(path = 'results/top1000_male_female.csv')
+top_int_annotated %>% readr::write_csv(path = 'results/top1000_interaction_male_female_res_sems.csv')
+top_res_vs_sens_annotated %>% readr::write_csv(path = 'results/top1000_res_sens.csv')
+
+# Enrichemnt
+
+enrich_go_int %>% save_dose_result(fname='results/ora_go_interaction_male_female_res_sems.csv')
+enrich_go_sens %>% save_dose_result(fname='results/ora_go_interaction_res_sens.csv')
+enrich_go_sex %>% save_dose_result(fname='results/ora_go_interaction_male_female.csv')
+
+gse_go_int %>% save_dose_result(fname='results/gse_go_interaction_male_female_res_sens.csv')
+gse_go_sens %>% save_dose_result(fname='results/gse_go_interaction_res_sens.csv')
+gse_go_sex %>% save_dose_result(fname='results/gse_go_interaction_male_female.csv')
+
+enrich_kegg_int  %>% save_dose_result(fname='results/ora_kegg_interaction_male_female_res_sems.csv')
+enrich_kegg_sens %>% save_dose_result(fname='results/ora_kegg_interaction_res_sens.csv')
+enrich_kegg_sex %>% save_dose_result(fname='results/ora_kegg_interaction_male_female.csv')
+
+gse_kegg_int  %>% save_dose_result(fname='results/gse_kegg_interaction_male_female_res_sems.csv')
+gse_kegg_sens %>% save_dose_result(fname='results/gse_kegg_interaction_res_sens.csv')
+gse_kegg_sex %>% save_dose_result(fname='results/gse_kegg_interaction_male_female.csv')
+
+zip
+
+```
+
+
+# Referencias a los paquetes utilizados
+
+```{r}
+citation('clusterProfiler')
+```
+
