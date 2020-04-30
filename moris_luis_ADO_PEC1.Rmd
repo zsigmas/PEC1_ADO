@@ -125,7 +125,7 @@ Aunque en el estudio original se analizan más factores, para esta práctica sim
 
 |Información del dataset|
 |-----+-------|
-|**Gene Expression Omnibus ID**|[`r GEO_ID`]^|
+|**Gene Expression Omnibus ID**|[`r GEO_ID`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE7614)|
 |**Organismo**| [Drosophila Melanogaster](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=7227)|
 |**Número de muestras**| 24 (15 individuos por muestra)|
 |**Grupos**| Macho Control (x2 Rep. Biológicas x2 Líneas)|
@@ -615,6 +615,8 @@ En este sección utilizaremos dos tipos de análisis sobre dos bases de datos di
 
 Para los resultados de cada uno de estos análisis presentamos el mismo conjunto de tablas y resultados. Una tabla que muestra los resultados obtenidos, con información relevante sobre cada uno de ellos y un enlace a cada uno de los elementos de la GO o KEGG encontrados. Los tipos de gráficos varían según el tipo de análisis.
 
+En el caso de KEGG cuando una ruta resulta significativa, el diagrama de la ruta se descarga y se colorea dependiendo de la expresión de los genes incluidos en la ruta para el análisis.
+
 ```{r preparing_gene_list, echo=FALSE}
 
 p_tibble = tibble::as_tibble(cm$p.value, rownames='PROBEID') %>% 
@@ -742,11 +744,27 @@ enrich_go_table = function(enrich_go){
 
 
 enrich_kegg_table = function(enrich_kegg){
-  enrich_kegg  %>% tibble::as_tibble() %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(browseKEGG(x=gse_kegg_sens, pathID=x),1,-2)}),
-                                                         Description = paste0("<a href='",Link,"' target='_blank'>",Description,"</a>")) %>% 
+  
+  enrich_kegg_tibble = enrich_kegg  %>% tibble::as_tibble()
+  
+  enrich_kegg_tibble  %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(browseKEGG(x=enrich_kegg, pathID=x),1,-2)}),
+                                 Description = paste0("<a href='",Link,"' target='_blank'>",Description,"</a>")) %>% 
     dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
-    dplyr::select(-Link) %>% 
+    dplyr::select(-Link, -one_of("geneID", "core_enrichment")) %>% 
     DT::datatable(escape=FALSE)
+}
+
+enrich_kegg_pathview = function(enrich_kegg, gene_list){
+  
+  enrich_kegg_tibble = enrich_kegg  %>% tibble::as_tibble()
+  
+  dev.null=lapply(enrich_kegg_tibble$ID,function(x){ if(!file.exists(paste0(x,'.xml'))){
+    pathview(gene.data = to_fold(gene_list),
+             pathway.id = x,
+             species='dme')}})
+  
+  dev.null=lapply(enrich_kegg_tibble$ID,function(x){plot(cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read(paste0(x,".pathview.png")))))})
+  
 }
 
 ```
@@ -871,18 +889,20 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 ```{r show_kegg_ORA_sex_table, echo=FALSE,}
 enrich_kegg_table(enrich_kegg_sex)
+enrich_kegg_pathview(enrich_kegg_sex, gene_list)
 ```
 
 
 ```{r show_kegg_ORA_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_kegg_sex, 'Macho vs. Hembra', type='KEGG')
-  
+
 ```
 
 #### Resistente vs. Sensible
 
 ```{r show_kegg_ORA_res_table, echo=FALSE,}
 enrich_kegg_table(enrich_kegg_sens)
+enrich_kegg_pathview(enrich_kegg_sens, gene_list)
 ```
 
 ```{r show_kegg_ORA_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
@@ -893,11 +913,13 @@ plot_enrich_ORA(enrich_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
 
 ```{r show_kegg_ORA_int_table, echo=FALSE,}
 enrich_kegg_table(enrich_kegg_int)
+enrich_kegg_pathview(enrich_kegg_int, gene_list)
 ```
 
 ```{r show_kegg_ORA_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de sobrerrepresetanción para KEGG",fig.fullwidth = TRUE}
 plot_enrich_ORA(enrich_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)', type='KEGG')
 ```
+
 
 ### Gene Set enrichment analysis
 
@@ -919,6 +941,7 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 ```{r show_kegg_GSE_sex_table, echo=FALSE,}
 enrich_kegg_table(gse_kegg_sex)
+enrich_kegg_pathview(gse_kegg_sex, gene_list)
 ```
 
 ```{r show_kegg_GSE_sex, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
@@ -929,34 +952,19 @@ plot_enrich_GSE(gse_kegg_sex, 'Macho vs. Hembra', type='KEGG')
 
 ```{r show_kegg_GSE_res_table, echo=FALSE,}
 enrich_kegg_table(gse_kegg_sens)
+enrich_kegg_pathview(gse_kegg_sens, gene_list)
 ```
 
 ```{r show_kegg_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
 plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
+
 ```
-
-
-```{r show_kegg_GSE_res_pathview, echo=FALSE}
-# pathview(gene.data = to_fold(gene_list),
-#          pathway.id = 'dme00980',
-#          species='dme')
-# 
-# pathview(gene.data = to_fold(gene_list),
-#          pathway.id = 'dme00982',
-#          species='dme')
-```
-
-**Metabolism of xenobiotics by cytochrome P450 pathway**
-
-![Metabolism of xenobiotics by cytochrome P450](./dme00980.pathview.png)
-
-**Drug metabolism - cytochrome P450**
-![Drug metabolism - cytochrome P450](./dme00982.pathview.png)
 
 #### Interacción Sexo y (Resistente vs. Sensible)
 
 ```{r show_kegg_GSE_int_table, echo=FALSE,}
 enrich_kegg_table(gse_kegg_int)
+enrich_kegg_pathview(gse_kegg_sens, gene_list)
 ```
 
 ```{r show_kegg_GSE_int, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
@@ -965,9 +973,7 @@ plot_enrich_GSE(gse_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)', t
 
 # Archivos generados
 
-Conjunto de archivos generados a lo largo del análisis:
-
-```{r}
+```{r, echo=FALSE}
 save_dose_result = function(enrich_df, fname){
   enrich_df %>% tibble::as_tibble() %>% readr::write_csv(x = ., path = paste0(fname,'.csv'))
 }
@@ -976,6 +982,8 @@ save_exprs = function(enrich_df, fname){
   save(enrich_df, file = paste0(fname,'.Rdata'))
   enrich_df %>% exprs() %>% tibble::as_tibble() %>% readr::write_csv(path = paste0(fname,'.csv'))
 }
+
+if(!file.exists('results.zip')){
 
 # Normalized-data
 save_exprs(eset_rma, 'results/normalized_data')
@@ -1006,10 +1014,33 @@ gse_kegg_int  %>% save_dose_result(fname='results/gse_kegg_interaction_male_fema
 gse_kegg_sens %>% save_dose_result(fname='results/gse_kegg_interaction_res_sens.csv')
 gse_kegg_sex %>% save_dose_result(fname='results/gse_kegg_interaction_male_female.csv')
 
-zip
+zip::zip(files='results',zipfile = 'results.zip')
+
+unlink('./results')
+}
 
 ```
 
+|Nombre|
+|-------------|
+|normalized_data.csv/.Rdata|
+|normalized_filtered_data.csv/.Rdata|
+|top1000_male_female.csv|
+|top1000_interaction_male_female_res_sems.csv|
+|top1000_res_sens.csv|
+|normalized_data|
+|ora_go_interaction_male_female_res_sems.csv|
+|ora_go_interaction_res_sens.csv|
+|ora_go_interaction_male_female.csv|
+|gse_go_interaction_male_female_res_sens.csv|
+|gse_go_interaction_res_sens.csv|
+|gse_go_interaction_male_female.csv|
+|ora_kegg_interaction_male_female_res_sems.csv|
+|ora_kegg_interaction_res_sens.csv|
+|ora_kegg_interaction_male_female.csv|
+|gse_kegg_interaction_male_female_res_sems.csv|
+|gse_kegg_interaction_res_sens.csv|
+|gse_kegg_interaction_male_female.csv|
 
 # Referencias a los paquetes utilizados
 
