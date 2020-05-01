@@ -966,7 +966,7 @@ enrich_kegg_pathview(gse_kegg_sens, gene_list)
 
 ```{r show_kegg_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
 suppressMessages(plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG'))
-```
+  ```
 
 #### Interacción Sexo y (Resistente vs. Sensible)
 
@@ -980,6 +980,11 @@ plot_enrich_GSE(gse_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)', t
 ```
 
 # Archivos generados
+
+
+[`r icon::fa_github()` Repositorio de código](https://github.com/zsigmas/PEC1_ADO)
+
+Los archivos aparecen comprimidos en el repositorio en formato zip.
 
 ```{r, echo=FALSE}
 save_dose_result = function(enrich_df, fname){
