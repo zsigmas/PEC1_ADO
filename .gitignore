@@ -8,10 +8,6 @@ moris_luis_ADO_PEC1.log
 tlcheckfile1vPjVx9n
 tlcheckfileLPdWG7jT
 
-*.png
-
-*.xml
-
 norm/
 
 pre_norm/
@@ -25,3 +21,5 @@ affyPLM\.RData
 rma_normalized\.Rda
 
 results/
+
+kegg_pathview/

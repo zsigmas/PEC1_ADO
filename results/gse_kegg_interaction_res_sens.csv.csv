@@ -1,3 +1,0 @@
-ID,Description,setSize,enrichmentScore,NES,pvalue,p.adjust,qvalues,rank,leading_edge,core_enrichment
-dme00980,Metabolism of xenobiotics by cytochrome P450,10,0.6247037175422294,1.7384426760185105,0.015292670065037792,0.04587801019511338,0.03219509487376378,94,"tags=40%, list=11%, signal=36%",Dmel_CG10091/Dmel_CG10178/Dmel_CG11140/Dmel_CG11784
-dme00982,Drug metabolism - cytochrome P450,10,0.6247037175422294,1.7384426760185105,0.015292670065037792,0.04587801019511338,0.03219509487376378,94,"tags=40%, list=11%, signal=36%",Dmel_CG10091/Dmel_CG10178/Dmel_CG11140/Dmel_CG11784

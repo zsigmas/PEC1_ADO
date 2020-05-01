@@ -8,15 +8,11 @@ output:
     highlight: kate
 bibliography: references.bib
 link-citations: yes
+nocite: '@*'
 ---
 
 
 ```{r setup, include=FALSE}
-library(tufte)
-# invalidate cache when the tufte version changes
-knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
-options(htmltools.dir.version = FALSE)
-library(GEOquery)
 library(Biobase)
 library(arrayQualityMetrics)
 library(ggplot2)
@@ -119,7 +115,7 @@ Aunque en el estudio original se analizan más factores, para esta práctica sim
 - Single Effect Resistente vs Sensible
 - Interacción Sexo vs (Resistente vs Sensible)
 
-*Nota*: Seguramente en este informe hemos incluido un poco de información en exceso y existen alguna información que quizá no fuera particularmente relevante para el investigador, sin embargo por completitud vamos a incluir un muy breve resumen de lo que haremos en cada paso y des las conclusiones que sacamos en cada uno de ellos.
+*Nota*: Seguramente en este informe hemos incluido un información en exceso y alguna información quizá no fuera particularmente relevante para el investigador, sin embargo por completitud vamos a incluir un muy breve resumen de lo que haremos en cada paso y de las conclusiones que sacamos en cada uno de ellos.
 
 ## Dataset
 
@@ -190,7 +186,7 @@ Luego hemos generado un ExpressionFeatureSet juntando los archivos .CEL y annota
 
 Para realizar un control de la calidad de los datos crudos vamos utilizar la libreria Array Quality Metrics y affyPLM.
 
-Lo haremos de dos maneras diferentes, primero sin transformar los datos con logaritmo de la intensidad y luego haciéndolo.
+Lo haremos de dos maneras diferentes, primero con los datos sin transformar y otra vez transformándolo con el logaritmo.
 
 ```{r compute_array_quality_metrics, echo=FALSE}
 
@@ -218,19 +214,19 @@ plot_grid(out, hm, box, pca, dens, msd, ma, labels = 'AUTO', label_size = 7, nco
 ``` 
 
 
-- En el gráfico A podemos observar un resumen de todas las muestras y el resultado obtenido del control de outliers. Vemos que según el algoritmo las muestras 1 y 17 podrían presentar algún problema por ello las tendremos en especial consideración cuando observemos los gráficos. En este caso no disponemos de la posibilidad de hacerlo, pero podríamos comprobar las imágenes de los microarrays para ver si ha ocurrido alǵun problema durante su procesado.
+- En el gráfico **A** podemos observar un resumen de todas las muestras y el resultado obtenido del control de outliers. Vemos que según el algoritmo las muestras 1 y 17 podrían presentar algún problema por ello las tendremos en especial consideración cuando observemos los gráficos. En este caso no disponemos de la posibilidad de hacerlo, pero podríamos comprobar las imágenes de los microarrays para ver si ha ocurrido alǵun problema durante su procesado.
 
-- En el gráfico B observamos una agrupación por distancias de los microarrays, vemos que hay una separación clara según el sexo de la muestra, a excepción de las muestras 1 y 17 que muestran una distancia un poco atípica se encuentran más distantes del resto de muestras de machos.
+- En el gráfico **B** observamos una agrupación por distancias de los microarrays, vemos que hay una separación clara según el sexo de la muestra, a excepción de las muestras 1 y 17 que muestran una distancia un poco atípica se encuentran más distantes del resto de muestras de machos.
 
-- En el gráfico C observamos los boxplots de las intensidades de cada uno de los arrays. También aparece marcado el array 17 quizá más disperso que el resto, también aparece marcado el 10, sin embargo no parece que sean muestras particularmente aberrantes.
+- En el gráfico **C** observamos los boxplots de las intensidades de cada uno de los arrays. También aparece marcado el array 17 quizá más disperso que el resto, también aparece marcado el 10, sin embargo no parece que sean muestras particularmente aberrantes.
 
-- En el gráfico D podemos observar un análisis por componentes principales, veremos debajo uno como el que se ha realizado durante las prácticas de la asignatura, en este caso vemos una separación clara entre los grupos macho y hembra de las muestras lo cual es esperable y deseable.
+- En el gráfico **D** podemos observar un análisis por componentes principales, veremos debajo uno como el que se ha realizado durante las prácticas de la asignatura, en este caso vemos una separación clara entre los grupos macho y hembra de las muestras lo cual es esperable y deseable.
 
-- En el gráfico E, vemos que las muestra siguen un mismo patrón, aunque la escala hace un poco complicada esta observación, probaremos luego con una función de affysimple.
+- En el gráfico **E**, vemos que las muestra siguen un mismo patrón, aunque la escala hace un poco complicada esta observación, probaremos luego con una función de affysimple.
 
-- En el gráfico F, el valor esperable es que la mediana sea constante, sin embargo aparece una pequeña joroba en el lado derecho, pero seguramente esté relacionado con una saturación de la intensidades como indica el propio paquete.
+- En el gráfico **F**, el valor esperable es que la mediana sea constante, sin embargo aparece una pequeña joroba en el lado derecho, pero seguramente esté relacionado con una saturación de la intensidades como indica el propio paquete.
 
-- En el gráfico G, podemos observar la comparación de cada uno de los arrays respecto a un pseudo-array que tiene el valor mediano a través del resto de arrays. En este caso lo esperable es que los valores se concentren a lo largo del eje M=0. Sin embargo al no estar transformados los valores aparece agrupados en el margen izquierdo haciendo difícil la visualización.
+- En el gráfico **G**, podemos observar la comparación de cada uno de los arrays respecto a un pseudo-array que tiene el valor mediano a través del resto de arrays. En este caso lo esperable es que los valores se concentren a lo largo del eje M=0. Sin embargo al no estar transformados los valores aparece agrupados en el margen izquierdo haciendo difícil la visualización.
 
 Vamos ahora a ver un PCA más completo
 
@@ -356,15 +352,22 @@ Los gráficos son los mismos que en apartados anteriores, ahora vemos una separa
 Solo existen dos detalles destacables, uno es la diferencia entre patrones de intensidad en la figura E entre las muestras machos y hembras, y la joroba que aparece en la figura F, cuando la mediana debería de ser plana, quizá sea debida a la diferencia entre sexos.
 
 
-## Conclusiones normalización
+## Conclusiones
 
 Los datos parecen correctos, por tanto no es necesaria ninguna acción.
 
-# Filtrado
+# Filtrado no específico
 
-Vamos a filtrar las probes que no tengan entrada en y las que corresponden a las sondas de control de Affymetrix. Vamos a hacerlo de manera manual utilizando la base de datos correspondiente al chip: *Affymetrix Drosophila Genome 2.0 Array*, en el paquete *'drosophila2.db'*. Lo que haremos será eliminar todas las *features* cuyo entrada *EntrezID* sea *NA*.
+Vamos a filtrar, lo haremos de manera manual:
+  - Sondas de control Affymetrix
+  - Sondas sin entrada *ENTREZID*
+  - Sondas con varios genes asignados
+  - Genes con varias sondas asignadas
 
-También vamos a eliminar algunas sondas que tienen varios genes asignados, o los genes que tienen varias sondas asignadas. Puede que exista alguna manera más correcta de realizar este paso, pero por sencillez las vamos a eliminar.
+Chip: *Affymetrix Drosophila Genome 2.0 Array*
+Paquete: *'drosophila2.db'*.
+
+Quizá exista alguna manera mejor, o más óptima de tratar los casos de sondas con varios y viceversa.
 
 ```{r filtrado no específico, echo = FALSE}
 geneSymbols <- suppressMessages(select(drosophila2.db, rownames(eset_rma), c("SYMBOL", "ENTREZID", "GENENAME")))
@@ -430,7 +433,7 @@ ggplot(dm_heat, aes(x=group, y=sample, fill=val)) +
 
 Una vez ajustado el modelo calculamos los siguientes contrastes
 
-```{r show_contrast_matrix, echo=FALSE, fig.cap='El eje horizontal indica cada uno de los términos del modelo. El eje verticaln indica cada uno de los contraste que vamos a utilizar.'}
+```{r show_contrast_matrix, echo=FALSE, fig.cap='El eje horizontal indica cada uno de los términos del modelo. El eje vertical indica cada uno de los contraste que vamos a utilizar.'}
 # contrast_matrix %>% kableExtra::kable(caption='Contrast Matrix') %>% kableExtra::kable_styling()
 
 # heatmap(t(contrast_matrix), Colv = NA, Rowv=NA,main='Contrast Matrix', col=c('#FFFFFF', '#666666', '#000000'))
@@ -477,7 +480,7 @@ top_res_vs_sens_annotated = annotatedTopTable(top_res_vs_ses, anotPackage = 'dro
 
 Las tablas permiten ordenar y filtrar los genes en función de diversos parámetros. Solamente se incluyen los 1000 genes más significativos por cada comparación.
 
-Se incluyen los p-valores ajustados usando false discovery rate [@fdrben].
+Se incluyen los p-valores ajustados usando false discovery rate.
 
 ```{r show_annotated_tables, echo=FALSE}
 pretty_top_table = function(top_table){
@@ -705,7 +708,7 @@ gse_go = function(contrast_a, gene_list){
 
 plot_enrich_ORA = function(enrich_df, contrast, type){
   if(nrow(enrich_df)==0){
-    return(NA)
+    return(invisible(NA))
   }
   p1 = heatplot(enrich_df) + labs(title=paste(contrast))
   p2 = dotplot(enrich_df)
@@ -722,7 +725,7 @@ plot_enrich_ORA = function(enrich_df, contrast, type){
 
 plot_enrich_GSE = function(enrich_df, contrast, type){
   if(nrow(enrich_df)==0){
-    return(NA)
+    return(invisible(NA))
   }
   
   if(type=='GO'){
@@ -737,9 +740,10 @@ plot_enrich_GSE = function(enrich_df, contrast, type){
 }
 
 enrich_go_table = function(enrich_go){
-  enrich_go %>% tibble::as_tibble() %>% dplyr::mutate(ID = glue::glue("<a href='http://amigo.geneontology.org/amigo/term/{ID}' target='_blank'>{ID}</a>",ID=ID)) %>% 
+  suppressWarnings(enrich_go %>% tibble::as_tibble() %>% dplyr::mutate(ID = glue::glue("<a href='http://amigo.geneontology.org/amigo/term/{ID}' target='_blank'>{ID}</a>",ID=ID)) %>% 
   dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
-  DT::datatable(escape=FALSE)
+  dplyr::select(-one_of("geneID", "core_enrichment")) %>% 
+  DT::datatable(escape=FALSE))
 }
 
 
@@ -747,23 +751,32 @@ enrich_kegg_table = function(enrich_kegg){
   
   enrich_kegg_tibble = enrich_kegg  %>% tibble::as_tibble()
   
-  enrich_kegg_tibble  %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(browseKEGG(x=enrich_kegg, pathID=x),1,-2)}),
+  gen_url = function(x, pathID){paste0("http://www.kegg.jp/kegg-bin/show_pathway?", 
+    pathID, "/", x[pathID, "geneID"])}
+  
+  suppressWarnings(enrich_kegg_tibble  %>% dplyr::mutate(Link = lapply(ID, function(x){stringr::str_sub(gen_url(x=enrich_kegg, pathID=x),1,-2)}),
                                  Description = paste0("<a href='",Link,"' target='_blank'>",Description,"</a>")) %>% 
     dplyr::mutate_if(is.numeric, signif, digits=2) %>% 
     dplyr::select(-Link, -one_of("geneID", "core_enrichment")) %>% 
-    DT::datatable(escape=FALSE)
+    DT::datatable(escape=FALSE))
 }
 
-enrich_kegg_pathview = function(enrich_kegg, gene_list){
+enrich_kegg_pathview = function(enrich_kegg, gene_list, dir_path='./kegg_pathview'){
   
   enrich_kegg_tibble = enrich_kegg  %>% tibble::as_tibble()
   
-  dev.null=lapply(enrich_kegg_tibble$ID,function(x){ if(!file.exists(paste0(x,'.xml'))){
+  dev.null=lapply(enrich_kegg_tibble$ID,function(x){ if(!file.exists(file.path(dir_path, paste0(x,'.xml')))){
     pathview(gene.data = to_fold(gene_list),
              pathway.id = x,
-             species='dme')}})
+             species='dme',
+             kegg.dir = dir_path
+             )
+    file.copy(from = paste0(x,".pathview.png"),
+              to = file.path(dir_path, paste0(x,".pathview.png")))
+    
+    }})
   
-  dev.null=lapply(enrich_kegg_tibble$ID,function(x){plot(cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read(paste0(x,".pathview.png")))))})
+  dev.null=lapply(enrich_kegg_tibble$ID,function(x){plot(cowplot::ggdraw() + cowplot::draw_image(image_trim(image_read(file.path(dir_path, paste0(x,".pathview.png"))))))})
   
 }
 
@@ -771,8 +784,6 @@ enrich_kegg_pathview = function(enrich_kegg, gene_list){
 
 
 ## Gene Ontology
-
-En 
 
 ### Over-representation analysis
 
@@ -790,7 +801,7 @@ tibble::tibble(Contrast = c('Macho vs. Hembra', 'Resistente vs. Sensible', 'Inte
 
 #### Macho vs. Hembra
 
-En este caso aparecen muchos genes relacionados con cada ruta y la visualización se hace un poco complicada. Un [upsetplot](https://yulab-smu.github.io/clusterProfiler-book/chapter12.html#upset-plot) hubiese sido más útil, pero en este caso el paquete daba un error de compatibilidad que no he sido capaz de solucionar.
+En este caso aparecen muchos genes relacionados con los diferentes términos de *GO* y la visualización se hace un poco complicada. Un [upsetplot](https://yulab-smu.github.io/clusterProfiler-book/chapter12.html#upset-plot) hubiese sido más útil, pero en este caso el paquete daba un error de compatibilidad que no he sido capaz de solucionar.
 
 ```{r show_go_ORA_table_sex, echo=FALSE}
 enrich_go_table(enrich_go_sex)
@@ -923,8 +934,6 @@ plot_enrich_ORA(enrich_kegg_int, 'Interacción Sexo y (Resistente vs. Sensible)'
 
 ### Gene Set enrichment analysis
 
-En los casos en que hemos encontrado rutas significativas, hemos utilizado el paquete *pathway* para descargar la ruta de la base de datos de KEGG e incluirla en el documento. Así los genes significativos se pueden observar dentro del contexto de la ruta.
-
 ```{r compute_kegg_GSE, echo=FALSE}
 gse_kegg_int = suppressMessages(suppressWarnings(gse_kegg('int_sex_resvssens', gene_list)))
 gse_kegg_sens = suppressMessages(suppressWarnings(gse_kegg('res_vs_sens', gene_list)))
@@ -956,8 +965,7 @@ enrich_kegg_pathview(gse_kegg_sens, gene_list)
 ```
 
 ```{r show_kegg_GSE_res, echo=FALSE, fig.fullwidth = TRUE, out.width='100%', fig.height=2, fig.width=10, out.height='100%', fig.cap="Resultados de GSE para KEGG",fig.fullwidth = TRUE}
-plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG')
-
+suppressMessages(plot_enrich_GSE(gse_kegg_sens, 'Resistente vs. Sensible', type='KEGG'))
 ```
 
 #### Interacción Sexo y (Resistente vs. Sensible)
@@ -984,39 +992,37 @@ save_exprs = function(enrich_df, fname){
 }
 
 if(!file.exists('results.zip')){
-
-# Normalized-data
-save_exprs(eset_rma, 'results/normalized_data')
-
-# Normalized-Filtered-data
-save_exprs(eset_rma_filtered, 'results/normalized_filtered_data')
-
-# Tables
-top_sex_annotated %>% readr::write_csv(path = 'results/top1000_male_female.csv')
-top_int_annotated %>% readr::write_csv(path = 'results/top1000_interaction_male_female_res_sems.csv')
-top_res_vs_sens_annotated %>% readr::write_csv(path = 'results/top1000_res_sens.csv')
-
-# Enrichemnt
-
-enrich_go_int %>% save_dose_result(fname='results/ora_go_interaction_male_female_res_sems.csv')
-enrich_go_sens %>% save_dose_result(fname='results/ora_go_interaction_res_sens.csv')
-enrich_go_sex %>% save_dose_result(fname='results/ora_go_interaction_male_female.csv')
-
-gse_go_int %>% save_dose_result(fname='results/gse_go_interaction_male_female_res_sens.csv')
-gse_go_sens %>% save_dose_result(fname='results/gse_go_interaction_res_sens.csv')
-gse_go_sex %>% save_dose_result(fname='results/gse_go_interaction_male_female.csv')
-
-enrich_kegg_int  %>% save_dose_result(fname='results/ora_kegg_interaction_male_female_res_sems.csv')
-enrich_kegg_sens %>% save_dose_result(fname='results/ora_kegg_interaction_res_sens.csv')
-enrich_kegg_sex %>% save_dose_result(fname='results/ora_kegg_interaction_male_female.csv')
-
-gse_kegg_int  %>% save_dose_result(fname='results/gse_kegg_interaction_male_female_res_sems.csv')
-gse_kegg_sens %>% save_dose_result(fname='results/gse_kegg_interaction_res_sens.csv')
-gse_kegg_sex %>% save_dose_result(fname='results/gse_kegg_interaction_male_female.csv')
-
-zip::zip(files='results',zipfile = 'results.zip')
-
-unlink('./results')
+  # Normalized-data
+  save_exprs(eset_rma, 'results/normalized_data')
+  
+  # Normalized-Filtered-data
+  save_exprs(eset_rma_filtered, 'results/normalized_filtered_data')
+  
+  # Tables
+  top_sex_annotated %>% readr::write_csv(path = 'results/top1000_male_female.csv')
+  top_int_annotated %>% readr::write_csv(path = 'results/top1000_interaction_male_female_res_sems.csv')
+  top_res_vs_sens_annotated %>% readr::write_csv(path = 'results/top1000_res_sens.csv')
+  
+  # Enrichement
+  enrich_go_int %>% save_dose_result(fname='results/ora_go_interaction_male_female_res_sems')
+  enrich_go_sens %>% save_dose_result(fname='results/ora_go_interaction_res_sens')
+  enrich_go_sex %>% save_dose_result(fname='results/ora_go_interaction_male_female')
+  
+  gse_go_int %>% save_dose_result(fname='results/gse_go_interaction_male_female_res_sens')
+  gse_go_sens %>% save_dose_result(fname='results/gse_go_interaction_res_sens')
+  gse_go_sex %>% save_dose_result(fname='results/gse_go_interaction_male_female')
+  
+  enrich_kegg_int  %>% save_dose_result(fname='results/ora_kegg_interaction_male_female_res_sems')
+  enrich_kegg_sens %>% save_dose_result(fname='results/ora_kegg_interaction_res_sens')
+  enrich_kegg_sex %>% save_dose_result(fname='results/ora_kegg_interaction_male_female')
+  
+  gse_kegg_int  %>% save_dose_result(fname='results/gse_kegg_interaction_male_female_res_sems')
+  gse_kegg_sens %>% save_dose_result(fname='results/gse_kegg_interaction_res_sens')
+  gse_kegg_sex %>% save_dose_result(fname='results/gse_kegg_interaction_male_female')
+  
+  zip::zip(files='results',zipfile = 'results.zip')
+  
+  unlink('./results')
 }
 
 ```
@@ -1028,7 +1034,6 @@ unlink('./results')
 |top1000_male_female.csv|
 |top1000_interaction_male_female_res_sems.csv|
 |top1000_res_sens.csv|
-|normalized_data|
 |ora_go_interaction_male_female_res_sems.csv|
 |ora_go_interaction_res_sens.csv|
 |ora_go_interaction_male_female.csv|
@@ -1044,7 +1049,14 @@ unlink('./results')
 
 # Referencias a los paquetes utilizados
 
-```{r}
-citation('clusterProfiler')
+```{r, echo=FALSE, include=FALSE, eval=FALSE}
+pack_list = c('Biobase','arrayQualityMetrics','ggplot2','ggrepel','cowplot','magick','oligo','limma','gplots','clusterProfiler','drosophila2.db','affyPLM','annaffy','org.Dm.eg.db','AnnotationDbi','pathview', 'tidyverse', 'kableExtra')
+
+bib_list = unlist(lapply(pack_list, function(x){toBibtex(citation(x))}))
+
+bib_list_2 = unlist(lapply(1:length(bib_list), function(x){stringr::str_replace(bib_list[[x]],pattern='\\{,',replacement=paste0('\\{',x,','))}))
+
+writeLines(bib_list_2, 'references.bib')
+
 ```
 
